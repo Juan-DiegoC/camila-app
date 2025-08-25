@@ -1,0 +1,94 @@
+2025-08-24 19:26:48,344 - DEBUG - Debug logging enabled
+2025-08-24 19:26:48,344 - INFO - Starting file metadata extraction from: /home/juandiego/camila-app
+2025-08-24 19:26:48,345 - INFO - Output file: clean_debug_test.xlsx
+2025-08-24 19:26:48,345 - INFO - Debug mode: True
+2025-08-24 19:26:48,353 - INFO - Processing potential PDF: /home/juandiego/camila-app/01SmallReport.pdf
+2025-08-24 19:26:48,354 - INFO - Processing PDF: /home/juandiego/camila-app/01SmallReport.pdf
+2025-08-24 19:26:48,355 - DEBUG - MIME type for /home/juandiego/camila-app/01SmallReport.pdf: application/pdf
+2025-08-24 19:26:48,355 - DEBUG - MIME type for /home/juandiego/camila-app/01SmallReport.pdf: application/pdf
+2025-08-24 19:26:48,355 - DEBUG - PDF validation for /home/juandiego/camila-app/01SmallReport.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,355 - DEBUG - PDF check for /home/juandiego/camila-app/01SmallReport.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,356 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/01SmallReport.pdf
+2025-08-24 19:26:48,358 - DEBUG - PyPDF2 success: 1 pages for /home/juandiego/camila-app/01SmallReport.pdf
+2025-08-24 19:26:48,359 - INFO - Successfully extracted 1 pages from /home/juandiego/camila-app/01SmallReport.pdf using PyPDF2
+2025-08-24 19:26:48,363 - INFO - Processing potential PDF: /home/juandiego/camila-app/02MediumGuide.pdf
+2025-08-24 19:26:48,363 - INFO - Processing PDF: /home/juandiego/camila-app/02MediumGuide.pdf
+2025-08-24 19:26:48,364 - DEBUG - MIME type for /home/juandiego/camila-app/02MediumGuide.pdf: application/pdf
+2025-08-24 19:26:48,364 - DEBUG - MIME type for /home/juandiego/camila-app/02MediumGuide.pdf: application/pdf
+2025-08-24 19:26:48,364 - DEBUG - PDF validation for /home/juandiego/camila-app/02MediumGuide.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,365 - DEBUG - PDF check for /home/juandiego/camila-app/02MediumGuide.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,365 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/02MediumGuide.pdf
+2025-08-24 19:26:48,370 - DEBUG - PyPDF2 success: 5 pages for /home/juandiego/camila-app/02MediumGuide.pdf
+2025-08-24 19:26:48,370 - INFO - Successfully extracted 5 pages from /home/juandiego/camila-app/02MediumGuide.pdf using PyPDF2
+2025-08-24 19:26:48,375 - INFO - Processing potential PDF: /home/juandiego/camila-app/03LargeManual.pdf
+2025-08-24 19:26:48,376 - INFO - Processing PDF: /home/juandiego/camila-app/03LargeManual.pdf
+2025-08-24 19:26:48,376 - DEBUG - MIME type for /home/juandiego/camila-app/03LargeManual.pdf: application/pdf
+2025-08-24 19:26:48,377 - DEBUG - MIME type for /home/juandiego/camila-app/03LargeManual.pdf: application/pdf
+2025-08-24 19:26:48,377 - DEBUG - PDF validation for /home/juandiego/camila-app/03LargeManual.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,378 - DEBUG - PDF check for /home/juandiego/camila-app/03LargeManual.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,378 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/03LargeManual.pdf
+2025-08-24 19:26:48,389 - DEBUG - PyPDF2 success: 15 pages for /home/juandiego/camila-app/03LargeManual.pdf
+2025-08-24 19:26:48,389 - INFO - Successfully extracted 15 pages from /home/juandiego/camila-app/03LargeManual.pdf using PyPDF2
+2025-08-24 19:26:48,393 - INFO - Processing potential PDF: /home/juandiego/camila-app/04ShortDoc.pdf
+2025-08-24 19:26:48,393 - INFO - Processing PDF: /home/juandiego/camila-app/04ShortDoc.pdf
+2025-08-24 19:26:48,393 - DEBUG - MIME type for /home/juandiego/camila-app/04ShortDoc.pdf: application/pdf
+2025-08-24 19:26:48,394 - DEBUG - MIME type for /home/juandiego/camila-app/04ShortDoc.pdf: application/pdf
+2025-08-24 19:26:48,394 - DEBUG - PDF validation for /home/juandiego/camila-app/04ShortDoc.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,394 - DEBUG - PDF check for /home/juandiego/camila-app/04ShortDoc.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,394 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/04ShortDoc.pdf
+2025-08-24 19:26:48,399 - DEBUG - PyPDF2 success: 3 pages for /home/juandiego/camila-app/04ShortDoc.pdf
+2025-08-24 19:26:48,399 - INFO - Successfully extracted 3 pages from /home/juandiego/camila-app/04ShortDoc.pdf using PyPDF2
+2025-08-24 19:26:48,406 - INFO - Processing potential PDF: /home/juandiego/camila-app/05ComprehensiveReport.pdf
+2025-08-24 19:26:48,406 - INFO - Processing PDF: /home/juandiego/camila-app/05ComprehensiveReport.pdf
+2025-08-24 19:26:48,406 - DEBUG - MIME type for /home/juandiego/camila-app/05ComprehensiveReport.pdf: application/pdf
+2025-08-24 19:26:48,407 - DEBUG - MIME type for /home/juandiego/camila-app/05ComprehensiveReport.pdf: application/pdf
+2025-08-24 19:26:48,407 - DEBUG - PDF validation for /home/juandiego/camila-app/05ComprehensiveReport.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,407 - DEBUG - PDF check for /home/juandiego/camila-app/05ComprehensiveReport.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,408 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/05ComprehensiveReport.pdf
+2025-08-24 19:26:48,426 - DEBUG - PyPDF2 success: 25 pages for /home/juandiego/camila-app/05ComprehensiveReport.pdf
+2025-08-24 19:26:48,427 - INFO - Successfully extracted 25 pages from /home/juandiego/camila-app/05ComprehensiveReport.pdf using PyPDF2
+2025-08-24 19:26:48,433 - INFO - Processing potential PDF: /home/juandiego/camila-app/06QuickReference.pdf
+2025-08-24 19:26:48,434 - INFO - Processing PDF: /home/juandiego/camila-app/06QuickReference.pdf
+2025-08-24 19:26:48,434 - DEBUG - MIME type for /home/juandiego/camila-app/06QuickReference.pdf: application/pdf
+2025-08-24 19:26:48,434 - DEBUG - MIME type for /home/juandiego/camila-app/06QuickReference.pdf: application/pdf
+2025-08-24 19:26:48,435 - DEBUG - PDF validation for /home/juandiego/camila-app/06QuickReference.pdf: MIME=True, Header=True, Result=True
+2025-08-24 19:26:48,435 - DEBUG - PDF check for /home/juandiego/camila-app/06QuickReference.pdf: extension=.pdf, mime=application/pdf, valid_pdf=True
+2025-08-24 19:26:48,435 - DEBUG - Trying PyPDF2 for /home/juandiego/camila-app/06QuickReference.pdf
+2025-08-24 19:26:48,438 - DEBUG - PyPDF2 success: 2 pages for /home/juandiego/camila-app/06QuickReference.pdf
+2025-08-24 19:26:48,438 - INFO - Successfully extracted 2 pages from /home/juandiego/camila-app/06QuickReference.pdf using PyPDF2
+2025-08-24 19:26:48,448 - DEBUG - Non-PDF file: /home/juandiego/camila-app/08TextFile.txt, setting pages = 1
+2025-08-24 19:26:48,454 - DEBUG - Non-PDF file: /home/juandiego/camila-app/09PythonScript.py, setting pages = 1
+2025-08-24 19:26:48,461 - DEBUG - Non-PDF file: /home/juandiego/camila-app/10ConfigFile.json, setting pages = 1
+2025-08-24 19:26:48,466 - DEBUG - Non-PDF file: /home/juandiego/camila-app/11Documentation.md, setting pages = 1
+2025-08-24 19:26:48,470 - INFO - Processing potential PDF: /home/juandiego/camila-app/12CorruptedFile.pdf
+2025-08-24 19:26:48,471 - INFO - Processing PDF: /home/juandiego/camila-app/12CorruptedFile.pdf
+2025-08-24 19:26:48,471 - DEBUG - MIME type for /home/juandiego/camila-app/12CorruptedFile.pdf: application/pdf
+2025-08-24 19:26:48,471 - DEBUG - MIME type for /home/juandiego/camila-app/12CorruptedFile.pdf: application/pdf
+2025-08-24 19:26:48,473 - DEBUG - PDF validation for /home/juandiego/camila-app/12CorruptedFile.pdf: MIME=True, Header=False, Result=False
+2025-08-24 19:26:48,474 - DEBUG - PDF check for /home/juandiego/camila-app/12CorruptedFile.pdf: extension=.pdf, mime=application/pdf, valid_pdf=False
+2025-08-24 19:26:48,474 - WARNING - File /home/juandiego/camila-app/12CorruptedFile.pdf has .pdf extension but is not a valid PDF (MIME: application/pdf)
+2025-08-24 19:26:48,474 - WARNING - Skipping PDF processing for /home/juandiego/camila-app/12CorruptedFile.pdf - not a valid PDF
+2025-08-24 19:26:48,480 - INFO - Processing potential PDF: /home/juandiego/camila-app/13FakePDF.pdf
+2025-08-24 19:26:48,480 - INFO - Processing PDF: /home/juandiego/camila-app/13FakePDF.pdf
+2025-08-24 19:26:48,481 - DEBUG - MIME type for /home/juandiego/camila-app/13FakePDF.pdf: application/pdf
+2025-08-24 19:26:48,481 - DEBUG - MIME type for /home/juandiego/camila-app/13FakePDF.pdf: application/pdf
+2025-08-24 19:26:48,482 - DEBUG - PDF validation for /home/juandiego/camila-app/13FakePDF.pdf: MIME=True, Header=False, Result=False
+2025-08-24 19:26:48,482 - DEBUG - PDF check for /home/juandiego/camila-app/13FakePDF.pdf: extension=.pdf, mime=application/pdf, valid_pdf=False
+2025-08-24 19:26:48,482 - WARNING - File /home/juandiego/camila-app/13FakePDF.pdf has .pdf extension but is not a valid PDF (MIME: application/pdf)
+2025-08-24 19:26:48,482 - WARNING - Skipping PDF processing for /home/juandiego/camila-app/13FakePDF.pdf - not a valid PDF
+2025-08-24 19:26:48,486 - DEBUG - Non-PDF file: /home/juandiego/camila-app/14PythonFile.py, setting pages = 1
+2025-08-24 19:26:48,490 - DEBUG - Non-PDF file: /home/juandiego/camila-app/15AudioFile.mp3, setting pages = 1
+2025-08-24 19:26:48,493 - DEBUG - Non-PDF file: /home/juandiego/camila-app/16VideoFile.mp4, setting pages = 1
+2025-08-24 19:26:48,496 - DEBUG - Non-PDF file: /home/juandiego/camila-app/README.md, setting pages = 1
+2025-08-24 19:26:48,501 - DEBUG - Non-PDF file: /home/juandiego/camila-app/create_test_files.py, setting pages = 1
+2025-08-24 19:26:48,504 - DEBUG - Non-PDF file: /home/juandiego/camila-app/formatted_output.xlsx, setting pages = 1
+2025-08-24 19:26:48,508 - DEBUG - Non-PDF file: /home/juandiego/camila-app/debug_test.xlsx, setting pages = 1
+2025-08-24 19:26:48,512 - DEBUG - Non-PDF file: /home/juandiego/camila-app/robust_output.xlsx, setting pages = 1
+2025-08-24 19:26:48,518 - DEBUG - Non-PDF file: /home/juandiego/camila-app/indice de ejemplo.xlsm, setting pages = 1
+2025-08-24 19:26:48,525 - DEBUG - Non-PDF file: /home/juandiego/camila-app/test_output.xlsx, setting pages = 1
+2025-08-24 19:26:48,530 - DEBUG - Non-PDF file: /home/juandiego/camila-app/debug.log, setting pages = 1
+2025-08-24 19:26:48,541 - DEBUG - Non-PDF file: /home/juandiego/camila-app/requirements.txt, setting pages = 1
+2025-08-24 19:26:48,544 - DEBUG - Non-PDF file: /home/juandiego/camila-app/file_metadata_extractor.py, setting pages = 1
+2025-08-24 19:26:48,556 - DEBUG - Non-PDF file: /home/juandiego/camila-app/error_handling_test.xlsx, setting pages = 1
+2025-08-24 19:26:48,564 - DEBUG - Non-PDF file: /home/juandiego/camila-app/metadata_output.xlsx, setting pages = 1
+2025-08-24 19:26:48,636 - INFO - Processing completed successfully

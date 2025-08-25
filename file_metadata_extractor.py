@@ -6,7 +6,10 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import re
-from typing import List, Tuple
+import logging
+import traceback
+import mimetypes
+from typing import List, Tuple, Optional
 
 try:
     import PyPDF2
@@ -20,6 +23,16 @@ try:
 except ImportError:
     PYMUPDF_AVAILABLE = False
     print("Warning: PyMuPDF not available. PDF processing may be limited for corrupted files.")
+
+# Setup logging
+def setup_logging(debug: bool = False):
+    """Setup logging configuration."""
+    level = logging.DEBUG if debug else logging.INFO
+    format_str = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(level=level, format=format_str)
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
 
 try:
     from openpyxl import load_workbook, Workbook
@@ -36,77 +49,182 @@ def extract_number_from_filename(filename: str) -> int:
     return int(match.group(1)) if match else float('inf')
 
 
-def is_valid_pdf(file_path: str) -> bool:
-    """Check if file is a valid PDF by reading first few bytes."""
+def get_file_mime_type(file_path: str) -> str:
+    """Get file MIME type using multiple methods."""
     try:
+        # First try mimetypes module
+        mime_type, _ = mimetypes.guess_type(file_path)
+        if mime_type:
+            logger.debug(f"MIME type for {file_path}: {mime_type}")
+            return mime_type
+        
+        # Fallback: read file header
+        with open(file_path, 'rb') as file:
+            header = file.read(16)
+            
+        # Common file signatures
+        signatures = {
+            b'%PDF-': 'application/pdf',
+            b'\x89PNG': 'image/png',
+            b'\xff\xd8\xff': 'image/jpeg',
+            b'GIF8': 'image/gif',
+            b'RIFF': 'audio/wav',  # or video
+            b'ID3': 'audio/mp3',
+            b'\xff\xfb': 'audio/mp3',
+            b'\xff\xf3': 'audio/mp3',
+            b'\xff\xf2': 'audio/mp3',
+            b'ftyp': 'video/mp4',  # offset 4 bytes
+            b'\x1a\x45\xdf\xa3': 'video/webm',
+        }
+        
+        for sig, mime in signatures.items():
+            if header.startswith(sig):
+                logger.debug(f"Detected {mime} for {file_path} by signature")
+                return mime
+                
+        # Check MP4 at offset 4
+        if len(header) >= 8 and header[4:8] == b'ftyp':
+            logger.debug(f"Detected video/mp4 for {file_path} by offset signature")
+            return 'video/mp4'
+            
+        logger.debug(f"Unknown file type for {file_path}, header: {header[:8]}")
+        return 'application/octet-stream'
+        
+    except Exception as e:
+        logger.error(f"Error detecting MIME type for {file_path}: {e}")
+        return 'application/octet-stream'
+
+def is_valid_pdf(file_path: str) -> bool:
+    """Check if file is a valid PDF by reading first few bytes and MIME type."""
+    try:
+        mime_type = get_file_mime_type(file_path)
+        is_pdf_mime = mime_type == 'application/pdf'
+        
         with open(file_path, 'rb') as file:
             header = file.read(5)
-            return header == b'%PDF-'
-    except Exception:
+            is_pdf_header = header == b'%PDF-'
+            
+        result = is_pdf_mime and is_pdf_header
+        logger.debug(f"PDF validation for {file_path}: MIME={is_pdf_mime}, Header={is_pdf_header}, Result={result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error validating PDF {file_path}: {e}")
         return False
 
-def get_pdf_pages_pypdf2(file_path: str) -> int:
+def get_pdf_pages_pypdf2(file_path: str) -> Optional[int]:
     """Get PDF pages using PyPDF2."""
     try:
+        logger.debug(f"Trying PyPDF2 for {file_path}")
         with open(file_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
-            return len(pdf_reader.pages)
+            page_count = len(pdf_reader.pages)
+            logger.debug(f"PyPDF2 success: {page_count} pages for {file_path}")
+            return page_count
     except Exception as e:
-        print(f"PyPDF2 error for {file_path}: {str(e)[:100]}...")
+        logger.error(f"PyPDF2 failed for {file_path}: {type(e).__name__}: {str(e)}")
+        logger.debug(f"PyPDF2 full traceback for {file_path}:\n{traceback.format_exc()}")
         return None
 
-def get_pdf_pages_pymupdf(file_path: str) -> int:
+def get_pdf_pages_pymupdf(file_path: str) -> Optional[int]:
     """Get PDF pages using PyMuPDF (fallback)."""
     if not PYMUPDF_AVAILABLE:
+        logger.debug("PyMuPDF not available")
         return None
     try:
+        logger.debug(f"Trying PyMuPDF for {file_path}")
         doc = fitz.open(file_path)
         page_count = len(doc)
         doc.close()
+        logger.debug(f"PyMuPDF success: {page_count} pages for {file_path}")
         return page_count
     except Exception as e:
-        print(f"PyMuPDF error for {file_path}: {str(e)[:100]}...")
+        logger.error(f"PyMuPDF failed for {file_path}: {type(e).__name__}: {str(e)}")
+        logger.debug(f"PyMuPDF full traceback for {file_path}:\n{traceback.format_exc()}")
         return None
 
 def get_pdf_pages_estimate(file_path: str) -> int:
     """Estimate PDF pages by searching for page objects in raw content."""
     try:
+        logger.debug(f"Trying estimation method for {file_path}")
         with open(file_path, 'rb') as file:
-            content = file.read()
-            # Count occurrences of page object patterns
-            page_patterns = [b'/Type /Page', b'/Type/Page', b'endobj']
-            max_count = 0
-            for pattern in page_patterns:
-                count = content.count(pattern)
-                if pattern == b'endobj':
-                    count = max(1, count // 10)  # Rough estimate
-                max_count = max(max_count, count)
-            return max(1, min(max_count, 1000))  # Cap at reasonable number
-    except Exception:
+            content = file.read(min(1024*1024, os.path.getsize(file_path)))  # Read max 1MB
+            
+        # Count occurrences of page object patterns
+        page_patterns = [b'/Type /Page', b'/Type/Page', b'endobj']
+        pattern_counts = {}
+        
+        for pattern in page_patterns:
+            count = content.count(pattern)
+            if pattern == b'endobj':
+                count = max(1, count // 10)  # Rough estimate
+            pattern_counts[pattern] = count
+            
+        max_count = max(pattern_counts.values()) if pattern_counts else 1
+        estimated_pages = max(1, min(max_count, 1000))  # Cap at reasonable number
+        
+        logger.debug(f"Pattern counts for {file_path}: {pattern_counts}")
+        logger.debug(f"Estimated {estimated_pages} pages for {file_path}")
+        return estimated_pages
+        
+    except Exception as e:
+        logger.error(f"Estimation failed for {file_path}: {type(e).__name__}: {str(e)}")
         return 1
 
+def should_process_as_pdf(file_path: str) -> bool:
+    """Determine if file should be processed as PDF based on extension AND content."""
+    # Only check files with .pdf extension
+    if not file_path.lower().endswith('.pdf'):
+        return False
+        
+    # Check if it's actually a PDF file
+    mime_type = get_file_mime_type(file_path)
+    is_actually_pdf = is_valid_pdf(file_path)
+    
+    logger.debug(f"PDF check for {file_path}: extension=.pdf, mime={mime_type}, valid_pdf={is_actually_pdf}")
+    
+    if not is_actually_pdf:
+        logger.warning(f"File {file_path} has .pdf extension but is not a valid PDF (MIME: {mime_type})")
+        return False
+        
+    return True
+
 def get_pdf_pages(file_path: str) -> int:
-    """Get number of pages in a PDF file with multiple fallback methods."""
-    # First check if it's a valid PDF
-    if not is_valid_pdf(file_path):
-        print(f"Warning: {file_path} is not a valid PDF file")
+    """Get number of pages in a PDF file with comprehensive error handling."""
+    logger.info(f"Processing PDF: {file_path}")
+    
+    # First check if we should even try to process as PDF
+    if not should_process_as_pdf(file_path):
+        logger.warning(f"Skipping PDF processing for {file_path} - not a valid PDF")
         return 1
     
     # Try PyPDF2 first
-    pages = get_pdf_pages_pypdf2(file_path)
-    if pages is not None:
-        return pages
+    try:
+        pages = get_pdf_pages_pypdf2(file_path)
+        if pages is not None:
+            logger.info(f"Successfully extracted {pages} pages from {file_path} using PyPDF2")
+            return pages
+    except Exception as e:
+        logger.error(f"Unexpected error in PyPDF2 processing for {file_path}: {e}")
     
     # Try PyMuPDF as fallback
-    pages = get_pdf_pages_pymupdf(file_path)
-    if pages is not None:
-        print(f"Used PyMuPDF fallback for {file_path}")
-        return pages
+    try:
+        pages = get_pdf_pages_pymupdf(file_path)
+        if pages is not None:
+            logger.info(f"Successfully extracted {pages} pages from {file_path} using PyMuPDF (fallback)")
+            return pages
+    except Exception as e:
+        logger.error(f"Unexpected error in PyMuPDF processing for {file_path}: {e}")
     
     # Last resort: estimate based on file content
-    pages = get_pdf_pages_estimate(file_path)
-    print(f"Used estimation method for {file_path}: {pages} pages")
-    return pages
+    try:
+        pages = get_pdf_pages_estimate(file_path)
+        logger.warning(f"Using estimation method for {file_path}: {pages} pages")
+        return pages
+    except Exception as e:
+        logger.error(f"All PDF processing methods failed for {file_path}: {e}")
+        logger.error(f"Final fallback traceback:\n{traceback.format_exc()}")
+        return 1
 
 
 def get_file_size(file_path: str) -> str:
@@ -254,11 +372,18 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
         
         if os.path.isfile(item_path):
             # Column E: Número Páginas (Number of pages)
-            if item_path.lower().endswith('.pdf'):
-                pages = get_pdf_pages(item_path)
-            else:
-                pages = 1
-            ws[f'E{current_row}'].value = pages
+            try:
+                if item_path.lower().endswith('.pdf'):
+                    logger.info(f"Processing potential PDF: {item_path}")
+                    pages = get_pdf_pages(item_path)
+                else:
+                    pages = 1
+                    logger.debug(f"Non-PDF file: {item_path}, setting pages = 1")
+                ws[f'E{current_row}'].value = pages
+            except Exception as e:
+                logger.error(f"Error processing file {item_path} for page count: {e}")
+                logger.error(f"Stack trace:\n{traceback.format_exc()}")
+                ws[f'E{current_row}'].value = 1  # Fallback
             
             # Column F: Página Inicio (Starting page)
             ws[f'F{current_row}'].value = current_page
@@ -332,17 +457,46 @@ def main():
     parser.add_argument('--output', '-o',
                        default='metadata_output.xlsx',
                        help='Output Excel file (default: metadata_output.xlsx)')
+    parser.add_argument('--debug', '-v',
+                       action='store_true',
+                       help='Enable debug logging')
+    parser.add_argument('--log-file',
+                       help='Write logs to file instead of console')
     
     args = parser.parse_args()
     
+    # Setup logging based on arguments
+    global logger
+    if args.log_file:
+        # Setup file logging
+        file_handler = logging.FileHandler(args.log_file)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Debug logging enabled")
+    
+    logger.info(f"Starting file metadata extraction from: {args.directory}")
+    logger.info(f"Output file: {args.output}")
+    logger.info(f"Debug mode: {args.debug}")
+    
     if not os.path.isdir(args.directory):
+        logger.error(f"Directory not found: {args.directory}")
         print(f"Error: {args.directory} is not a valid directory")
         sys.exit(1)
     
     try:
         process_files_to_excel(args.directory, args.output)
+        logger.info("Processing completed successfully")
     except Exception as e:
+        logger.error(f"Fatal error during processing: {e}")
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
         print(f"Error processing files: {e}")
+        if args.debug:
+            print("Check debug logs for detailed error information.")
         sys.exit(1)
 
 
