@@ -9,6 +9,9 @@ import re
 import logging
 import traceback
 import mimetypes
+import csv
+import stat
+import tempfile
 from typing import List, Tuple, Optional
 
 try:
@@ -334,7 +337,67 @@ def add_headers_and_formatting(ws):
         cell.alignment = header_alignment
         cell.border = thin_border
 
-def process_files_to_excel(directory: str, output_file: str = "metadata_output.xlsx"):
+def check_file_permissions(file_path: str) -> bool:
+    """Check if we can write to the specified file path."""
+    try:
+        # Check if file exists and is writable
+        if os.path.exists(file_path):
+            return os.access(file_path, os.W_OK)
+        
+        # Check if directory is writable
+        directory = os.path.dirname(file_path) or '.'
+        return os.access(directory, os.W_OK)
+    except Exception as e:
+        logger.error(f"Error checking permissions for {file_path}: {e}")
+        return False
+
+def create_safe_filename(base_name: str) -> str:
+    """Create a safe filename, adding timestamp if needed."""
+    if check_file_permissions(base_name):
+        return base_name
+    
+    # Try with timestamp
+    name, ext = os.path.splitext(base_name)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamped_name = f"{name}_{timestamp}{ext}"
+    
+    if check_file_permissions(timestamped_name):
+        logger.info(f"Using timestamped filename: {timestamped_name}")
+        return timestamped_name
+    
+    # Fall back to temp directory
+    temp_dir = tempfile.gettempdir()
+    temp_name = os.path.join(temp_dir, os.path.basename(timestamped_name))
+    logger.warning(f"Using temp directory: {temp_name}")
+    return temp_name
+
+def export_to_csv(data: List[dict], csv_file: str) -> bool:
+    """Export data to CSV format."""
+    try:
+        logger.info(f"Exporting to CSV: {csv_file}")
+        
+        # Create safe filename
+        safe_csv_file = create_safe_filename(csv_file)
+        
+        with open(safe_csv_file, 'w', newline='', encoding='utf-8') as file:
+            if not data:
+                logger.warning("No data to export to CSV")
+                return False
+                
+            writer = csv.DictWriter(file, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+            
+        logger.info(f"CSV export successful: {safe_csv_file}")
+        print(f"CSV file created: {safe_csv_file}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"CSV export failed: {e}")
+        logger.error(f"CSV export traceback:\n{traceback.format_exc()}")
+        return False
+
+def process_files_to_excel(directory: str, output_file: str = "metadata_output.xlsx", export_csv: bool = False):
     """Process files and write metadata to Excel file matching the template format."""
     
     # Get ordered files
@@ -442,11 +505,65 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
     for col, width in column_widths.items():
         ws.column_dimensions[col].width = width
     
-    # Save the workbook
-    wb.save(output_file)
-    print(f"Metadata extracted and saved to {output_file}")
-    print(f"Processed {len(ordered_items)} items from {directory}")
-    print(f"Format matches 'indice de ejemplo.xlsm' template")
+    # Prepare data for CSV export if requested
+    csv_data = []
+    if export_csv:
+        for idx, (item_name, item_path) in enumerate(ordered_items):
+            current_row = start_row + idx
+            
+            row_data = {
+                'Nombre Documento': ws[f'A{current_row}'].value,
+                'Fecha Creación Documento': ws[f'B{current_row}'].value,
+                'Fecha Incorporación Expediente': ws[f'C{current_row}'].value,
+                'Orden Documento': ws[f'D{current_row}'].value,
+                'Número Páginas': ws[f'E{current_row}'].value,
+                'Página Inicio': ws[f'F{current_row}'].value,
+                'Página Fin': ws[f'G{current_row}'].value,
+                'Formato': ws[f'H{current_row}'].value,
+                'Tamaño': ws[f'I{current_row}'].value,
+                'Origen': ws[f'J{current_row}'].value,
+                'Observaciones': ws[f'K{current_row}'].value or ''
+            }
+            csv_data.append(row_data)
+    
+    # Save the Excel workbook
+    try:
+        safe_excel_file = create_safe_filename(output_file)
+        logger.info(f"Saving Excel file: {safe_excel_file}")
+        wb.save(safe_excel_file)
+        print(f"Metadata extracted and saved to {safe_excel_file}")
+        print(f"Processed {len(ordered_items)} items from {directory}")
+        print(f"Format matches 'indice de ejemplo.xlsm' template")
+        
+        # Export to CSV if requested
+        if export_csv:
+            csv_file = safe_excel_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+            export_to_csv(csv_data, csv_file)
+            
+    except PermissionError as e:
+        logger.error(f"Permission denied when saving Excel file: {e}")
+        print(f"ERROR: Permission denied when saving {output_file}")
+        print("Possible causes:")
+        print("- File is open in Excel or another program")
+        print("- Insufficient write permissions in the directory")
+        print("- File is read-only")
+        
+        # Try to export CSV as fallback
+        if export_csv or True:  # Always try CSV as fallback
+            print("\nTrying CSV export as fallback...")
+            csv_file = output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+            if export_to_csv(csv_data, csv_file):
+                print("CSV export successful!")
+            else:
+                print("CSV export also failed.")
+        
+        raise  # Re-raise to be caught by main()
+        
+    except Exception as e:
+        logger.error(f"Unexpected error saving Excel file: {e}")
+        logger.error(f"Excel save traceback:\n{traceback.format_exc()}")
+        print(f"ERROR: Unexpected error saving {output_file}: {e}")
+        raise
 
 
 def main():
@@ -462,6 +579,12 @@ def main():
                        help='Enable debug logging')
     parser.add_argument('--log-file',
                        help='Write logs to file instead of console')
+    parser.add_argument('--csv', '-c',
+                       action='store_true',
+                       help='Also export to CSV format')
+    parser.add_argument('--csv-only',
+                       action='store_true',
+                       help='Export only to CSV format (no Excel)')
     
     args = parser.parse_args()
     
@@ -489,14 +612,34 @@ def main():
         sys.exit(1)
     
     try:
-        process_files_to_excel(args.directory, args.output)
+        if args.csv_only:
+            # CSV-only mode
+            csv_file = args.output.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+            logger.info("CSV-only mode enabled")
+            process_files_to_excel(args.directory, csv_file, export_csv=True)
+        else:
+            # Normal mode (Excel + optional CSV)
+            process_files_to_excel(args.directory, args.output, export_csv=args.csv)
+            
         logger.info("Processing completed successfully")
+        
+    except PermissionError as e:
+        logger.error(f"Permission error: {e}")
+        print(f"\nERROR: Permission denied - {e}")
+        print("\nTroubleshooting steps:")
+        print("1. Close Excel or any program that might have the file open")
+        print("2. Check file permissions and make sure directory is writable")
+        print("3. Try running with --csv-only flag for CSV output only")
+        print("4. Try specifying a different output directory with -o")
+        sys.exit(1)
+        
     except Exception as e:
         logger.error(f"Fatal error during processing: {e}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        print(f"Error processing files: {e}")
+        print(f"\nERROR: {e}")
         if args.debug:
-            print("Check debug logs for detailed error information.")
+            print("\nCheck debug logs for detailed error information.")
+        print("\nTry using --csv-only flag if Excel export is failing.")
         sys.exit(1)
 
 
