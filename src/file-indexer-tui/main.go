@@ -132,6 +132,8 @@ type model struct {
 	filteredDirs    []directoryItem
 	advancedMode    bool // Toggle with Ctrl+D
 	isSpanish       bool // Language toggle with Ctrl+E
+	processedDirs   []string // Track processed directories
+	showProcessedDirs bool   // Toggle visibility of processed directories
 }
 
 // Language strings
@@ -232,7 +234,7 @@ func getStrings(isSpanish bool) langStrings {
 			savedTo:           "💾 Guardado en:",
 			readyToUse:        "✅ ¡Tu índice de archivos está listo para usar!",
 			tryAgain:          "🔄 Presiona 'r' para intentar de nuevo",
-			processAnother:    "🔄 Presiona 'r' para procesar otro directorio",
+			processAnother:    "🔄 Enter/Esc = Procesar otro directorio  •  r = Reiniciar",
 			quitAnytime:       "Presiona 'q' o Ctrl+C para salir",
 			filterPrompt:      "🔍 Filtrar Directorios:",
 			filterControls:    "⌨️ Controles:\n  Escribe para filtrar  Tab = Autocompletar  Enter = Aplicar\n  Esc = Cancelar filtro",
@@ -290,7 +292,7 @@ func getStrings(isSpanish bool) langStrings {
 		savedTo:           "💾 Saved to:",
 		readyToUse:        "✅ Your file index is ready to use!",
 		tryAgain:          "🔄 Press 'r' to try again",
-		processAnother:    "🔄 Press 'r' to process another directory",
+		processAnother:    "🔄 Enter/Esc = Process another directory  •  r = Reset",
 		quitAnytime:       "Press 'q' or Ctrl+C to quit anytime",
 		filterPrompt:      "🔍 Filter Directories:",
 		filterControls:    "⌨️ Controls:\n  Type to filter  Tab = Auto-complete  Enter = Apply\n  Esc = Cancel filter",
@@ -316,8 +318,10 @@ func initialModel() model {
 	// Get Downloads directory
 	startDir := getDownloadsDirectory()
 	
+	// Create a temporary model to use for filtering
+	tempModel := model{showProcessedDirs: false, processedDirs: []string{}}
 	// Initialize directory list
-	items := getDirectoryItems(startDir)
+	items := tempModel.getFilteredDirectoryItems(startDir)
 	
 	// Create list with nice styling and double width
 	delegate := list.NewDefaultDelegate()
@@ -361,6 +365,8 @@ func initialModel() model {
 		allDirectories: convertToDirectoryItems(items),
 		advancedMode:  false,
 		isSpanish:     true, // Default to Spanish for Spanish users
+		processedDirs: []string{}, // Initialize empty processed directories
+		showProcessedDirs: false,   // Hide processed directories by default
 	}
 }
 
@@ -422,6 +428,87 @@ func getDirectoryItems(dirPath string) []list.Item {
 			
 			// Get modification time
 			fullPath := filepath.Join(dirPath, name)
+			info, err := entry.Info()
+			var modTime time.Time
+			if err == nil {
+				modTime = info.ModTime()
+			}
+			
+			// Check if directory is empty (has files)
+			if !isDirEmpty(fullPath) {
+				dirItems = append(dirItems, directoryItem{
+					name:    name,
+					path:    fullPath,
+					isDir:   true,
+					modTime: modTime,
+				})
+			}
+		}
+	}
+
+	// Sort by modification time (most recent first)
+	sort.Slice(dirItems, func(i, j int) bool {
+		return dirItems[i].modTime.After(dirItems[j].modTime)
+	})
+
+	// Convert to list items
+	for _, dirItem := range dirItems {
+		items = append(items, dirItem)
+	}
+
+	return items
+}
+
+// Helper function to check if a directory has been processed
+func (m model) isDirectoryProcessed(dirPath string) bool {
+	for _, processedDir := range m.processedDirs {
+		if processedDir == dirPath {
+			return true
+		}
+	}
+	return false
+}
+
+// Enhanced function to get directory items with processed filtering
+func (m model) getFilteredDirectoryItems(dirPath string) []list.Item {
+	var items []list.Item
+	var dirItems []directoryItem
+
+	// Add parent directory option if not at root
+	if parent := filepath.Dir(dirPath); parent != dirPath {
+		items = append(items, directoryItem{
+			name:   "..",
+			path:   parent,
+			isDir:  true,
+			modTime: time.Time{}, // Parent gets zero time to always appear first
+		})
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return items
+	}
+
+	// Collect directories with modification times
+	for _, entry := range entries {
+		if entry.IsDir() {
+			name := entry.Name()
+			// Skip hidden directories and ensure name is not empty
+			if name == "" || strings.HasPrefix(name, ".") {
+				continue
+			}
+			// Ensure the name is valid and displayable
+			if len(strings.TrimSpace(name)) == 0 {
+				continue
+			}
+			
+			fullPath := filepath.Join(dirPath, name)
+			
+			// Skip processed directories if showProcessedDirs is false
+			if !m.showProcessedDirs && m.isDirectoryProcessed(fullPath) {
+				continue
+			}
+			
 			info, err := entry.Info()
 			var modTime time.Time
 			if err == nil {
@@ -548,7 +635,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.filterInput.SetValue("")
 					m.filterInput.Blur()
 					// Reset to show all directories
-					items := getDirectoryItems(m.currentPath)
+					items := m.getFilteredDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
 					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
@@ -594,7 +681,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.filterInput.Focus()
 					m.filterInput.SetValue("")
 					// Store all directories for filtering
-					items := getDirectoryItems(m.currentPath)
+					items := m.getFilteredDirectoryItems(m.currentPath)
 					m.directoryList.Title = fmt.Sprintf("Filter in: %s", m.currentPath)
 					m.allDirectories = convertToDirectoryItems(items)
 					m.filteredDirs = m.allDirectories
@@ -605,7 +692,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Go to parent directory
 						m.currentPath = selected.path
 						// Update directory list and path display
-						items := getDirectoryItems(m.currentPath)
+						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
@@ -626,7 +713,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if selected.isDir && selected.name != ".." {
 						m.currentPath = selected.path
 						// Update directory list and path display
-						items := getDirectoryItems(m.currentPath)
+						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
@@ -641,12 +728,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Use simple "index" filename (xlsx will be auto-appended)
 				m.outputInput.SetValue("index")
 				return m, nil
+			case "p":
+				// Toggle processed directories visibility
+				m.showProcessedDirs = !m.showProcessedDirs
+				// Refresh directory list with new filter
+				items := m.getFilteredDirectoryItems(m.currentPath)
+				m.directoryList.SetItems(items)
+				m.directoryList.Select(0) // Reset cursor to first item
+				// Update title to show current mode
+				titleSuffix := ""
+				if m.showProcessedDirs {
+					titleSuffix = " [Mostrando procesados]"
+				} else {
+					titleSuffix = " [Ocultando procesados]"
+				}
+				m.directoryList.Title = fmt.Sprintf("Navigate: %s%s", m.currentPath, titleSuffix)
+				m.allDirectories = convertToDirectoryItems(items)
+				return m, nil
 			case "left":
 				// Go up one directory level
 				parentDir := filepath.Dir(m.currentPath)
 				if parentDir != m.currentPath { // Not at root
 					m.currentPath = parentDir
-					items := getDirectoryItems(m.currentPath)
+					items := m.getFilteredDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
 					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
@@ -659,7 +763,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if selected.isDir && selected.name != ".." {
 						m.currentPath = selected.path
 						// Update directory list and path display
-						items := getDirectoryItems(m.currentPath)
+						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
@@ -765,7 +869,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c", "q":
 				return m, tea.Quit
 			case "r":
-				// Reset and start over
+				// Reset and start over (clear processed directories)
 				return initialModel(), nil
 			case "b", "backspace":
 				// Go back to configuration
@@ -774,7 +878,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.result = ""
 				return m, nil
 			case "enter", "esc":
-				return m, tea.Quit
+				// Go back to directory selection to process another directory
+				m.state = selectingDirectory
+				m.error = ""
+				m.result = ""
+				m.selectedDir = ""
+				m.outputPath = ""
+				m.litigantName = ""
+				// Refresh directory list to reflect processed directories
+				items := m.getFilteredDirectoryItems(m.currentPath)
+				m.directoryList.SetItems(items)
+				m.directoryList.Select(0)
+				titleSuffix := ""
+				if m.showProcessedDirs {
+					titleSuffix = " [Mostrando procesados]"
+				} else {
+					titleSuffix = " [Ocultando procesados]"
+				}
+				m.directoryList.Title = fmt.Sprintf("Navigate: %s%s", m.currentPath, titleSuffix)
+				m.allDirectories = convertToDirectoryItems(items)
+				return m, nil
 			}
 		}
 	
@@ -784,6 +907,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = msg.error
 		} else {
 			m.result = msg.result
+			// Add the directory to processed list on successful completion
+			m.processedDirs = append(m.processedDirs, m.selectedDir)
 		}
 		m.state = finished
 		return m, nil
@@ -856,7 +981,8 @@ func (m model) View() string {
 				str.navigation + "\n" +
 				"  " + str.browseDirectories + "    " + str.selectFolder + "\n" +
 				"  " + str.leftRight + "  " + str.selectCurrent + "\n" +
-				"  " + str.filterDirectories + "  " + str.advancedMode))
+				"  " + str.filterDirectories + "  " + "P = Alternar procesados\n" +
+				"  " + str.advancedMode))
 		}
 
 	case selectingOutput:
