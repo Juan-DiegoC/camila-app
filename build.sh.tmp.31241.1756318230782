@@ -1,0 +1,3 @@
+#!/bin/bash
+# Convenience build script - runs the main build from src directory
+cd src/file-indexer-tui && ./build.sh

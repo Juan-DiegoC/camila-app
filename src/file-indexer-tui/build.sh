@@ -34,14 +34,14 @@ fi
 # Clean old binaries
 echo ""
 echo "🧹 Cleaning old binaries..."
-rm -f file-indexer-linux file-indexer-windows.exe file-indexer-macos
+rm -f ../../file-indexer-linux ../../file-indexer-windows.exe ../../file-indexer-macos
 
 # Build for Linux (static linking, optimized)
 echo ""
 echo "🐧 Building for Linux..."
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $HOME/go/bin/go build -ldflags="-s -w" -o file-indexer-linux main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $HOME/go/bin/go build -ldflags="-s -w" -o ../../file-indexer-linux main.go
 if [ $? -eq 0 ]; then
-    echo "✅ Linux build successful ($(ls -lh file-indexer-linux | awk '{print $5}'))"
+    echo "✅ Linux build successful ($(ls -lh ../../file-indexer-linux | awk '{print $5}'))"
 else
     echo "❌ Linux build failed"
     exit 1
@@ -53,9 +53,9 @@ echo "🪟 Building for Windows..."
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $HOME/go/bin/go build \
     -ldflags="-s -w -X main.version=1.0.0" \
     -trimpath \
-    -o file-indexer-windows.exe main.go
+    -o ../../file-indexer-windows.exe main.go
 if [ $? -eq 0 ]; then
-    echo "✅ Windows build successful ($(ls -lh file-indexer-windows.exe | awk '{print $5}'))"
+    echo "✅ Windows build successful ($(ls -lh ../../file-indexer-windows.exe | awk '{print $5}'))"
 else
     echo "❌ Windows build failed"
     exit 1
@@ -64,9 +64,9 @@ fi
 # Build for macOS (static linking, optimized)
 echo ""
 echo "🍎 Building for macOS..."
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $HOME/go/bin/go build -ldflags="-s -w" -o file-indexer-macos main.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $HOME/go/bin/go build -ldflags="-s -w" -o ../../file-indexer-macos main.go
 if [ $? -eq 0 ]; then
-    echo "✅ macOS build successful ($(ls -lh file-indexer-macos | awk '{print $5}'))"
+    echo "✅ macOS build successful ($(ls -lh ../../file-indexer-macos | awk '{print $5}'))"
 else
     echo "❌ macOS build failed"
     exit 1
@@ -76,9 +76,9 @@ echo ""
 echo "🎉 Build completed successfully!"
 echo ""
 echo "📦 Binaries created:"
-echo "  🐧 file-indexer-linux      ($(ls -lh file-indexer-linux | awk '{print $5}'))"
-echo "  🪟 file-indexer-windows.exe ($(ls -lh file-indexer-windows.exe | awk '{print $5}'))"
-echo "  🍎 file-indexer-macos       ($(ls -lh file-indexer-macos | awk '{print $5}'))"
+echo "  🐧 file-indexer-linux      ($(ls -lh ../../file-indexer-linux | awk '{print $5}'))"
+echo "  🪟 file-indexer-windows.exe ($(ls -lh ../../file-indexer-windows.exe | awk '{print $5}'))"
+echo "  🍎 file-indexer-macos       ($(ls -lh ../../file-indexer-macos | awk '{print $5}'))"
 echo ""
 echo "🔧 Build optimizations:"
 echo "  ✓ Static linking (no external dependencies)"
