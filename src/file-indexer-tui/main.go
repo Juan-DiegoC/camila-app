@@ -71,6 +71,7 @@ type state int
 const (
 	selectingDirectory state = iota
 	selectingOutput
+	selectingLitigant
 	configuring
 	processing
 	finished
@@ -110,8 +111,10 @@ type model struct {
 	directoryList   list.Model
 	currentPath     string
 	outputInput     textinput.Model
+	litigantInput   textinput.Model
 	selectedDir     string
 	outputPath      string
+	litigantName    string
 	exportFormat    string // "excel", "csv", "both"
 	debugMode       bool
 	processing      bool
@@ -138,6 +141,7 @@ type langStrings struct {
 	step1Title              string
 	step2Title              string
 	step3Title              string
+	step4Title              string
 	navigation              string
 	browseDirectories       string
 	selectFolder            string
@@ -198,7 +202,8 @@ func getStrings(isSpanish bool) langStrings {
 			currentPath:       "📍 Actual",
 			step1Title:        "Paso 1: Navegar y Seleccionar Directorio (Solo Directorios)",
 			step2Title:        "Paso 2: Nombre del Archivo de Salida",
-			step3Title:        "Paso 3: Confirmar Configuración",
+			step3Title:        "Paso 3: Nombre del Litigante",
+			step4Title:        "Paso 4: Confirmar Configuración",
 			navigation:        "📍 Navegación:",
 			browseDirectories: "↑↓ Explorar directorios",
 			selectFolder:      "✅ Enter = SELECCIONAR carpeta resaltada",
@@ -255,7 +260,8 @@ func getStrings(isSpanish bool) langStrings {
 		currentPath:       "📍 Current",
 		step1Title:        "Step 1: Navigate and Select Directory (Directories Only)",
 		step2Title:        "Step 2: Output File Name",
-		step3Title:        "Step 3: Confirm Settings",
+		step3Title:        "Step 3: Litigant Name",
+		step4Title:        "Step 4: Confirm Settings",
 		navigation:        "📍 Navigation:",
 		browseDirectories: "↑↓ Browse directories",
 		selectFolder:      "✅ Enter = SELECT highlighted folder",
@@ -337,11 +343,17 @@ func initialModel() model {
 	filterInput.Placeholder = "Type to filter directories..."
 	filterInput.Width = 100 // Double width
 
+	// Initialize litigant input
+	litigantInput := textinput.New()
+	litigantInput.Placeholder = "Enter litigant name (e.g. Juan Pérez)"
+	litigantInput.Width = 100
+
 	return model{
 		state:         selectingDirectory,
 		directoryList: directoryList,
 		currentPath:   startDir,
 		outputInput:   ti,
+		litigantInput: litigantInput,
 		exportFormat:  "excel", // Default to Excel only
 		debugMode:     false,
 		filtering:     false,
@@ -665,10 +677,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+d", "\x04":
 				// Toggle advanced mode and preview it immediately
 				m.advancedMode = !m.advancedMode
-				// If we have a valid filename, go to confirmation step to show the change
+				// If we have a valid filename, go to litigant step to show the change
 				if strings.TrimSpace(m.outputInput.Value()) != "" {
 					m.outputPath = m.outputInput.Value()
-					m.state = configuring
+					m.state = selectingLitigant
+					m.litigantInput.Focus()
 				}
 				return m, nil
 			case "b", "backspace", "esc":
@@ -677,9 +690,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if m.outputInput.Value() != "" {
 					m.outputPath = m.outputInput.Value()
-					m.state = configuring
+					m.state = selectingLitigant
+					m.litigantInput.Focus()
 					return m, nil
 				}
+			}
+
+		case selectingLitigant:
+			switch msg.String() {
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			case "b", "backspace", "esc":
+				m.state = selectingOutput
+				m.outputInput.Focus()
+				return m, nil
+			case "enter":
+				m.litigantName = m.litigantInput.Value()
+				m.state = configuring
+				return m, nil
 			}
 
 		case configuring:
@@ -699,6 +727,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = selectingOutput
 				return m, nil
 			case "3":
+				// Edit litigant name
+				m.state = selectingLitigant
+				m.litigantInput.Focus()
+				return m, nil
+			case "4":
 				if m.advancedMode {
 					// Toggle format in advanced mode
 					if m.exportFormat == "excel" {
@@ -778,6 +811,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Don't update filter input here - it's handled in the key cases above
 	case selectingOutput:
 		m.outputInput, cmd = m.outputInput.Update(msg)
+	case selectingLitigant:
+		m.litigantInput, cmd = m.litigantInput.Update(msg)
 	}
 
 	return m, cmd
@@ -845,6 +880,22 @@ func (m model) View() string {
 			"  • Enter to continue, B/Esc to go back\n" +
 			"  • Ctrl+D = Advanced options (CSV, debug)"))
 
+	case selectingLitigant:
+		content.WriteString(dynamicBoxStyle.Render(
+			fmt.Sprintf("Selected: %s", m.selectedDir)))
+		content.WriteString("\n\n")
+		content.WriteString(dynamicBoxStyle.Render(
+			fmt.Sprintf("Output: %s", m.outputPath)))
+		content.WriteString("\n\n")
+		
+		content.WriteString(dynamicActiveBoxStyle.Render(
+			"Step 3: Litigant Name\n\n" +
+			m.litigantInput.View() + "\n\n" +
+			"💼 Enter the name of the person litigating\n" +
+			"   (e.g., Juan Pérez, María González)\n\n" +
+			"📝 This will be included in the document header\n\n" +
+			"Enter to continue, B/Esc to go back"))
+
 	case configuring:
 		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
@@ -853,10 +904,11 @@ func (m model) View() string {
 			fmt.Sprintf("📄 Output: %s", m.outputPath)))
 		content.WriteString("\n\n")
 
-		configBox := str.step3Title + "\n\n"
+		configBox := str.step4Title + "\n\n"
 		configBox += "✨ " + str.reviewSettings + "\n\n"
 		configBox += fmt.Sprintf("📁 " + str.directory + " %s\n", filepath.Base(m.selectedDir))
 		configBox += fmt.Sprintf("📄 " + str.output + " %s\n", m.outputPath)
+	configBox += fmt.Sprintf("🏛️ Litigante: %s\n", m.litigantName)
 		
 		if m.advancedMode {
 			formatName := "Excel (.xlsx)"
@@ -871,11 +923,13 @@ func (m model) View() string {
 			}
 			configBox += "\n🅰️ " + str.advancedModeTitle + "\n"
 			configBox += "  " + str.changeDirectory + "     " + str.changeFilename + "\n"
+			configBox += "  3 = Editar litigante\n"
 			configBox += "  " + str.toggleFormat + "        " + str.toggleDebug + "\n"
 			configBox += "  " + str.exitAdvancedMode + "\n"
 		} else {
 			configBox += "\n" + str.readyToProcess + "\n"
 			configBox += "  " + str.changeDirectory + "     " + str.changeFilename + "\n"
+			configBox += "  3 = Editar litigante\n"
 			configBox += "  🔥 " + str.advancedOptions + "\n"
 		}
 		configBox += "\n⏩ " + str.enterToStart + "  •  " + str.backToGoBack
@@ -983,6 +1037,11 @@ func (m model) runPythonScript() tea.Cmd {
 		// Add debug if enabled
 		if m.debugMode {
 			args = append(args, "--debug")
+		}
+		
+		// Add litigant name if provided
+		if m.litigantName != "" {
+			args = append(args, "--litigant", m.litigantName)
 		}
 
 		// Execute Python script

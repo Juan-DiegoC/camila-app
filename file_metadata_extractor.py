@@ -310,9 +310,48 @@ def setup_excel_formatting():
     
     return header_font, header_alignment, data_font, data_alignment, thin_border
 
-def add_headers_and_formatting(ws):
+def add_headers_and_formatting(ws, directory: str = "", litigant_name: str = ""):
     """Add headers and formatting to match the template."""
     header_font, header_alignment, data_font, data_alignment, thin_border = setup_excel_formatting()
+    
+    # Add document header information to match indice de ejemplo format
+    # Row 1: Ciudad
+    ws['A1'].value = 'Ciudad'
+    ws['B1'].value = 'SANTIAGO DE CALI (VALLE)'
+    ws['H1'].value = 'EXPEDIENTE FÍSICO'
+    
+    # Row 2: Despacho Judicial (Judge)
+    ws['A2'].value = 'Despacho Judicial'
+    ws['B2'].value = 'JUZGADO DECIMO LABORALDEL  CIRCUITO DE CALI'  # Standard judge format
+    ws['H2'].value = 'El expediente judicial posee documentos físicos:'
+    ws['J2'].value = 'SI     NO X'
+    
+    # Row 3: Serie
+    ws['A3'].value = 'Serie o Subserie Documental'
+    ws['B3'].value = 'ORDINARIO LABORAL DE PRIMERA INSTANCIA'
+    
+    # Row 4: Radicación  
+    ws['A4'].value = 'No. Radicación del Proceso'
+    ws['B4'].value = '76001310501020230040100'  # Standard format, could be made configurable
+    ws['H4'].value = 'No. de carpetas (cuadernos), legajos o tomos:'
+    
+    # Row 5: Demandado
+    ws['A5'].value = 'Partes Procesales (Parte A)\n(demandado, procesado, accionado)'
+    ws['B5'].value = 'PORVENIR Y OTROS'  # Standard format
+    ws['H5'].value = 'No. de carpetas (cuadernos), legajos o tomos digitalizados:'
+    
+    # Row 6: Demandante (Litigant)
+    ws['A6'].value = 'Partes Procesales (Parte B)\n(demandante, denunciante, accionante)'
+    ws['B6'].value = litigant_name.upper() if litigant_name else 'NOMBRE DEL LITIGANTE'
+    
+    # Row 7: Terceros
+    ws['A7'].value = 'Terceros Intervinientes'
+    
+    # Row 8: Cuaderno
+    ws['A8'].value = 'Cuaderno '
+    
+    # Row 10: Main title
+    ws['A10'].value = 'ÍNDICE ELECTRÓNICO DEL EXPEDIENTE JUDICIAL'
     
     # Headers in Spanish (row 11)
     headers = {
@@ -397,7 +436,7 @@ def export_to_csv(data: List[dict], csv_file: str) -> bool:
         logger.error(f"CSV export traceback:\n{traceback.format_exc()}")
         return False
 
-def process_files_to_excel(directory: str, output_file: str = "metadata_output.xlsx", export_csv: bool = False):
+def process_files_to_excel(directory: str, output_file: str = "metadata_output.xlsx", export_csv: bool = False, litigant_name: str = ""):
     """Process files and write metadata to Excel file matching the template format."""
     
     # Get ordered files
@@ -409,7 +448,7 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
     ws.title = "Indice Electrónico"
     
     # Add headers and formatting
-    add_headers_and_formatting(ws)
+    add_headers_and_formatting(ws, directory, litigant_name)
     
     header_font, header_alignment, data_font, data_alignment, thin_border = setup_excel_formatting()
     
@@ -474,7 +513,7 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
             ws[f'E{current_row}'].value = 1  # Directories count as 1 page
             ws[f'F{current_row}'].value = current_page
             ws[f'G{current_row}'].value = current_page  # Same start and end for directories
-            ws[f'H{current_row}'].value = "DIRECTORIO"
+            ws[f'H{current_row}'].value = "CARPETA"
             ws[f'I{current_row}'].value = f"{file_count} archivos"
             ws[f'J{current_row}'].value = "ELECTRONICO"
             
@@ -585,6 +624,9 @@ def main():
     parser.add_argument('--csv-only',
                        action='store_true',
                        help='Export only to CSV format (no Excel)')
+    parser.add_argument('--litigant', '-l',
+                       default='',
+                       help='Name of the litigant (demandante) for the header')
     
     args = parser.parse_args()
     
@@ -616,10 +658,10 @@ def main():
             # CSV-only mode
             csv_file = args.output.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
             logger.info("CSV-only mode enabled")
-            process_files_to_excel(args.directory, csv_file, export_csv=True)
+            process_files_to_excel(args.directory, csv_file, export_csv=True, litigant_name=args.litigant)
         else:
             # Normal mode (Excel + optional CSV)
-            process_files_to_excel(args.directory, args.output, export_csv=args.csv)
+            process_files_to_excel(args.directory, args.output, export_csv=args.csv, litigant_name=args.litigant)
             
         logger.info("Processing completed successfully")
         
