@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -17,9 +19,15 @@ import (
 
 // Styles
 var (
+	// Nordic-style colors
+	nordicAccent = "#88C0D0" // Nordic blue accent
+	nordicGreen = "#A3BE8C"  // Nordic green
+	nordicRed = "#BF616A"    // Nordic red
+	nordicPurple = "#B48EAD" // Nordic purple
+
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#04B575")).
+			Foreground(lipgloss.Color(nordicGreen)).
 			MarginLeft(2).
 			MarginBottom(1)
 
@@ -29,29 +37,29 @@ var (
 
 	errorStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#FF0000")).
+			Foreground(lipgloss.Color(nordicRed)).
 			MarginLeft(2)
 
 	successStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#04B575")).
+			Foreground(lipgloss.Color(nordicGreen)).
 			MarginLeft(2)
 
 	pathStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#874BFD")).
+			Foreground(lipgloss.Color(nordicPurple)).
 			MarginLeft(2)
 
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#874BFD")).
+			BorderForeground(lipgloss.Color(nordicPurple)).
 			Padding(1).
 			MarginLeft(2).
 			MarginRight(2)
 
 	activeBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#04B575")).
+			BorderForeground(lipgloss.Color(nordicAccent)).
 			Padding(1).
 			MarginLeft(2).
 			MarginRight(2)
@@ -73,6 +81,7 @@ type directoryItem struct {
 	name string
 	path string
 	isDir bool
+	modTime time.Time
 }
 
 func (i directoryItem) Title() string {
@@ -119,6 +128,182 @@ type model struct {
 	allDirectories  []directoryItem
 	filteredDirs    []directoryItem
 	advancedMode    bool // Toggle with Ctrl+D
+	isSpanish       bool // Language toggle with Ctrl+E
+}
+
+// Language strings
+type langStrings struct {
+	appTitle                string
+	currentPath             string
+	step1Title              string
+	step2Title              string
+	step3Title              string
+	navigation              string
+	browseDirectories       string
+	selectFolder            string
+	navigateInto            string
+	goUp                    string
+	selectCurrent           string
+	leftRight               string
+	filterDirectories       string
+	advancedMode            string
+	processing              string
+	processingDetails       string
+	finished                string
+	processingFailed        string
+	processingSuccess       string
+	willSaveAs              string
+	fileExtension           string
+	fileSavedIn             string
+	continueBack            string
+	advancedOptions         string
+	readyToProcess          string
+	changeDirectory         string
+	changeFilename          string
+	enterToStart            string
+	backToGoBack            string
+	filesProcessed          string
+	savedTo                 string
+	readyToUse              string
+	tryAgain                string
+	processAnother          string
+	quitAnytime             string
+	filterPrompt            string
+	filterControls          string
+	indexCreated            string
+	goToParent              string
+	filterMode              string
+	applyFilter             string
+	cancelFilter            string
+	autoComplete            string
+	changeLanguage          string
+	reset                   string
+	// Step 3 specific strings
+	reviewSettings          string
+	directory               string
+	output                  string
+	format                  string
+	debug                   string
+	advancedModeTitle       string
+	toggleFormat            string
+	toggleDebug             string
+	exitAdvancedMode        string
+	toQuit                  string
+}
+
+func getStrings(isSpanish bool) langStrings {
+	if isSpanish {
+		return langStrings{
+			appTitle:          "📁 Indexador de Metadatos de Archivos",
+			currentPath:       "📍 Actual",
+			step1Title:        "Paso 1: Navegar y Seleccionar Directorio (Solo Directorios)",
+			step2Title:        "Paso 2: Nombre del Archivo de Salida",
+			step3Title:        "Paso 3: Confirmar Configuración",
+			navigation:        "📍 Navegación:",
+			browseDirectories: "↑↓ Explorar directorios",
+			selectFolder:      "✅ Enter = SELECCIONAR carpeta resaltada",
+			navigateInto:      "→ = Entrar a carpeta",
+			goUp:              "← = Subir",
+			selectCurrent:     "Espacio = Seleccionar actual",
+			leftRight:         "←→ = Navegar directorios",
+			filterDirectories: "I = Filtrar directorios",
+			advancedMode:      "Ctrl+D = Modo avanzado",
+			processing:        "⏳ Procesando Archivos...",
+			processingDetails: "🔄 Escaneando directorio y extrayendo metadatos\n📊 Esto puede tomar tiempo para directorios grandes\n\nPresiona Ctrl+C para cancelar",
+			finished:          "Finalizado",
+			processingFailed:  "❌ Procesamiento Fallido",
+			processingSuccess: "✅ ¡Procesamiento Completado Exitosamente!",
+			willSaveAs:        "💾 Se guardará como:",
+			fileExtension:     "• Formato Excel (.xlsx)",
+			fileSavedIn:       "• Archivo guardado en directorio seleccionado",
+			continueBack:      "• Enter para continuar, B/Esc para regresar",
+			advancedOptions:   "• Ctrl+D = Opciones avanzadas (CSV, debug)",
+			readyToProcess:    "✨ Listo para procesar:",
+			changeDirectory:   "❶ = Cambiar directorio",
+			changeFilename:    "❷ = Cambiar nombre",
+			enterToStart:      "⏩ Enter para empezar procesamiento",
+			backToGoBack:      "B/Esc para regresar",
+			filesProcessed:    "📋 Archivos procesados:",
+			savedTo:           "💾 Guardado en:",
+			readyToUse:        "✅ ¡Tu índice de archivos está listo para usar!",
+			tryAgain:          "🔄 Presiona 'r' para intentar de nuevo",
+			processAnother:    "🔄 Presiona 'r' para procesar otro directorio",
+			quitAnytime:       "Presiona 'q' o Ctrl+C para salir",
+			filterPrompt:      "🔍 Filtrar Directorios:",
+			filterControls:    "⌨️ Controles:\n  Escribe para filtrar  Tab = Autocompletar  Enter = Aplicar\n  Esc = Cancelar filtro",
+			indexCreated:      "🎉 ¡Índice creado exitosamente!",
+			goToParent:        "Ir al directorio padre",
+			changeLanguage:    "Ctrl+E = Cambiar idioma",
+			reset:             "R = Reiniciar",
+			// Step 3 specific strings
+			reviewSettings:    "Revisar configuración:",
+			directory:         "Directorio:",
+			output:            "Salida:",
+			format:            "Formato:",
+			debug:             "Debug: Habilitado",
+			advancedModeTitle: "MODO AVANZADO - Más Opciones Disponibles:",
+			toggleFormat:      "❸ = Alternar formato",
+			toggleDebug:       "🔧 d = Alternar debug",
+			exitAdvancedMode:  "🔄 Ctrl+D = Salir modo avanzado",
+			toQuit:            "para salir",
+		}
+	}
+	
+	// English strings
+	return langStrings{
+		appTitle:          "📁 File Metadata Indexer",
+		currentPath:       "📍 Current",
+		step1Title:        "Step 1: Navigate and Select Directory (Directories Only)",
+		step2Title:        "Step 2: Output File Name",
+		step3Title:        "Step 3: Confirm Settings",
+		navigation:        "📍 Navigation:",
+		browseDirectories: "↑↓ Browse directories",
+		selectFolder:      "✅ Enter = SELECT highlighted folder",
+		navigateInto:      "→ = Enter folder",
+		goUp:              "← = Go up",
+		selectCurrent:     "Space = Select current",
+		leftRight:         "←→ = Navigate directories",
+		filterDirectories: "I = Filter directories",
+		advancedMode:      "Ctrl+D = Advanced mode",
+		processing:        "⏳ Processing Files...",
+		processingDetails: "🔄 Scanning directory and extracting metadata\n📊 This may take a while for large directories\n\nPress Ctrl+C to cancel",
+		finished:          "Finished",
+		processingFailed:  "❌ Processing Failed",
+		processingSuccess: "✅ Processing Completed Successfully!",
+		willSaveAs:        "💾 Will save as:",
+		fileExtension:     "• Excel (.xlsx) format",
+		fileSavedIn:       "• File saved in selected directory",
+		continueBack:      "• Enter to continue, B/Esc to go back",
+		advancedOptions:   "• Ctrl+D = Advanced options (CSV, debug)",
+		readyToProcess:    "✨ Ready to process:",
+		changeDirectory:   "❶ = Change directory",
+		changeFilename:    "❷ = Change filename",
+		enterToStart:      "⏩ Enter to start processing",
+		backToGoBack:      "B/Esc to go back",
+		filesProcessed:    "📋 Files processed:",
+		savedTo:           "💾 Saved to:",
+		readyToUse:        "✅ Your file index is ready to use!",
+		tryAgain:          "🔄 Press 'r' to try again",
+		processAnother:    "🔄 Press 'r' to process another directory",
+		quitAnytime:       "Press 'q' or Ctrl+C to quit anytime",
+		filterPrompt:      "🔍 Filter Directories:",
+		filterControls:    "⌨️ Controls:\n  Type to filter  Tab = Auto-complete  Enter = Apply\n  Esc = Cancel filter",
+		indexCreated:      "🎉 Index created successfully!",
+		goToParent:        "Go up to parent directory",
+		changeLanguage:    "Ctrl+E = Change language",
+		reset:             "R = Reset",
+		// Step 3 specific strings
+		reviewSettings:    "Review your settings:",
+		directory:         "Directory:",
+		output:            "Output:",
+		format:            "Format:",
+		debug:             "Debug: Enabled",
+		advancedModeTitle: "ADVANCED MODE - More Options Available:",
+		toggleFormat:      "❸ = Toggle format",
+		toggleDebug:       "🔧 d = Toggle debug",
+		exitAdvancedMode:  "🔄 Ctrl+D = Exit advanced mode",
+		toQuit:            "to quit",
+	}
 }
 
 func initialModel() model {
@@ -128,7 +313,7 @@ func initialModel() model {
 	// Initialize directory list
 	items := getDirectoryItems(startDir)
 	
-	// Create list with nice styling
+	// Create list with nice styling and double width
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
 		Foreground(lipgloss.Color("#04B575")).
@@ -136,21 +321,21 @@ func initialModel() model {
 	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
 		Foreground(lipgloss.Color("#626262"))
 		
-	directoryList := list.New(items, delegate, 60, 15)
+	directoryList := list.New(items, delegate, 120, 15) // Double width
 	directoryList.Title = fmt.Sprintf("Navigate: %s", startDir)
 	directoryList.SetShowStatusBar(false)
 	directoryList.SetShowHelp(false)
 
-	// Initialize output input
+	// Initialize output input with double width
 	ti := textinput.New()
 	ti.Placeholder = "Enter filename (e.g. my_index.xlsx)"
 	ti.Focus()
-	ti.Width = 50
+	ti.Width = 100 // Double width
 
-	// Initialize filter input
+	// Initialize filter input with double width
 	filterInput := textinput.New()
 	filterInput.Placeholder = "Type to filter directories..."
-	filterInput.Width = 50
+	filterInput.Width = 100 // Double width
 
 	return model{
 		state:         selectingDirectory,
@@ -163,6 +348,7 @@ func initialModel() model {
 		filterInput:   filterInput,
 		allDirectories: convertToDirectoryItems(items),
 		advancedMode:  false,
+		isSpanish:     true, // Default to Spanish for Spanish users
 	}
 }
 
@@ -192,13 +378,15 @@ func getDownloadsDirectory() string {
 
 func getDirectoryItems(dirPath string) []list.Item {
 	var items []list.Item
+	var dirItems []directoryItem
 
 	// Add parent directory option if not at root
 	if parent := filepath.Dir(dirPath); parent != dirPath {
 		items = append(items, directoryItem{
-			name:  "..",
-			path:  parent,
-			isDir: true,
+			name:   "..",
+			path:   parent,
+			isDir:  true,
+			modTime: time.Time{}, // Parent gets zero time to always appear first
 		})
 	}
 
@@ -207,7 +395,7 @@ func getDirectoryItems(dirPath string) []list.Item {
 		return items
 	}
 
-	// Only add directories (no files shown in directory selection)
+	// Collect directories with modification times
 	for _, entry := range entries {
 		if entry.IsDir() {
 			name := entry.Name()
@@ -219,15 +407,64 @@ func getDirectoryItems(dirPath string) []list.Item {
 			if len(strings.TrimSpace(name)) == 0 {
 				continue
 			}
-			items = append(items, directoryItem{
-				name:  name,
-				path:  filepath.Join(dirPath, name),
-				isDir: true,
-			})
+			
+			// Get modification time
+			fullPath := filepath.Join(dirPath, name)
+			info, err := entry.Info()
+			var modTime time.Time
+			if err == nil {
+				modTime = info.ModTime()
+			}
+			
+			// Check if directory is empty (has files)
+			if !isDirEmpty(fullPath) {
+				dirItems = append(dirItems, directoryItem{
+					name:    name,
+					path:    fullPath,
+					isDir:   true,
+					modTime: modTime,
+				})
+			}
 		}
 	}
 
+	// Sort by modification time (most recent first)
+	sort.Slice(dirItems, func(i, j int) bool {
+		return dirItems[i].modTime.After(dirItems[j].modTime)
+	})
+
+	// Convert to list items
+	for _, dirItem := range dirItems {
+		items = append(items, dirItem)
+	}
+
 	return items
+}
+
+func isDirEmpty(dirPath string) bool {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return true // Consider it empty if we can't read it
+	}
+	
+	// Check if directory has any files (not just subdirectories)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			return false // Found a file
+		}
+	}
+	
+	// If only directories, check if any subdirectory has files
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subPath := filepath.Join(dirPath, entry.Name())
+			if !isDirEmpty(subPath) {
+				return false // Found files in subdirectory
+			}
+		}
+	}
+	
+	return true // No files found anywhere
 }
 
 func convertToDirectoryItems(items []list.Item) []directoryItem {
@@ -273,6 +510,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Global shortcuts available in all states
+		switch msg.String() {
+		case "ctrl+e":
+			// Toggle language
+			m.isSpanish = !m.isSpanish
+			return m, nil
+		case "r":
+			// Reset to downloads page (except when processing)
+			if m.state != processing {
+				return initialModel(), nil
+			}
+		}
+		
 		switch m.state {
 		case selectingDirectory:
 			if m.filtering {
@@ -288,6 +538,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Reset to show all directories
 					items := getDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
+					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 					m.allDirectories = convertToDirectoryItems(items)
 					return m, nil
@@ -313,6 +564,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						filteredItems = append(filteredItems, dir)
 					}
 					m.directoryList.SetItems(filteredItems)
+					m.directoryList.Select(0) // Reset cursor to first item when filtering
 					return m, cmd
 				}
 			} else {
@@ -337,19 +589,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, textinput.Blink
 			case "enter":
 				if selected, ok := m.directoryList.SelectedItem().(directoryItem); ok {
-					if selected.isDir {
-						if selected.name == ".." {
-							// Go to parent directory
-							m.currentPath = selected.path
-						} else {
-							// Go into subdirectory or select current directory
-							if selected.name != ".." {
-								m.currentPath = selected.path
-							}
-						}
+					if selected.name == ".." {
+						// Go to parent directory
+						m.currentPath = selected.path
 						// Update directory list and path display
 						items := getDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
+						m.directoryList.Select(0) // Reset cursor to first item
+						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
+						m.allDirectories = convertToDirectoryItems(items)
+						return m, nil
+					} else {
+						// Select the highlighted directory
+						m.selectedDir = selected.path
+						m.state = selectingOutput
+						// Use simple "index" filename (xlsx will be auto-appended)
+						m.outputInput.SetValue("index")
+						return m, nil
+					}
+				}
+			case "n":
+				// Navigate into directory (old enter behavior)
+				if selected, ok := m.directoryList.SelectedItem().(directoryItem); ok {
+					if selected.isDir && selected.name != ".." {
+						m.currentPath = selected.path
+						// Update directory list and path display
+						items := getDirectoryItems(m.currentPath)
+						m.directoryList.SetItems(items)
+						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 						m.allDirectories = convertToDirectoryItems(items)
 						return m, nil
@@ -362,16 +629,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Use simple "index" filename (xlsx will be auto-appended)
 				m.outputInput.SetValue("index")
 				return m, nil
-			case "u", "up":
+			case "left":
 				// Go up one directory level
 				parentDir := filepath.Dir(m.currentPath)
 				if parentDir != m.currentPath { // Not at root
 					m.currentPath = parentDir
 					items := getDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
+					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 					m.allDirectories = convertToDirectoryItems(items)
 					return m, nil
+				}
+			case "right":
+				// Navigate into highlighted directory
+				if selected, ok := m.directoryList.SelectedItem().(directoryItem); ok {
+					if selected.isDir && selected.name != ".." {
+						m.currentPath = selected.path
+						// Update directory list and path display
+						items := getDirectoryItems(m.currentPath)
+						m.directoryList.SetItems(items)
+						m.directoryList.Select(0) // Reset cursor to first item
+						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
+						m.allDirectories = convertToDirectoryItems(items)
+						return m, nil
+					}
 				}
 			}
 			}
@@ -398,16 +680,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = configuring
 					return m, nil
 				}
-			case "tab":
-				// Toggle between xlsx and csv preview (but don't force extension in input)
-				if m.advancedMode {
-					if m.exportFormat == "excel" {
-						m.exportFormat = "csv"
-					} else {
-						m.exportFormat = "excel"
-					}
-				}
-				return m, nil
 			}
 
 		case configuring:
@@ -487,7 +759,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update components based on state
 	switch m.state {
 	case selectingDirectory:
-		m.directoryList, cmd = m.directoryList.Update(msg)
+		// Only pass certain keys to the directoryList, not navigation keys
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "up", "down", "j", "k":
+				// Pass these keys for list navigation (up/down selection)
+				m.directoryList, cmd = m.directoryList.Update(msg)
+			case "left", "right":
+				// Don't pass left/right to list - we handle them ourselves
+				// No action needed, already handled above
+			default:
+				// Pass other keys normally
+				if !m.filtering { // Don't update list when filtering
+					m.directoryList, cmd = m.directoryList.Update(msg)
+				}
+			}
+		}
 		// Don't update filter input here - it's handled in the key cases above
 	case selectingOutput:
 		m.outputInput, cmd = m.outputInput.Update(msg)
@@ -496,42 +783,49 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func getBoxStyle(backgroundOn bool) lipgloss.Style {
+	return boxStyle // No background changes
+}
+
+func getActiveBoxStyle(backgroundOn bool) lipgloss.Style {
+	return activeBoxStyle // No background changes
+}
+
 func (m model) View() string {
 	var content strings.Builder
+	str := getStrings(m.isSpanish)
+	
+	// Get dynamic styles (no background changes needed)
+	dynamicBoxStyle := getBoxStyle(false)
+	dynamicActiveBoxStyle := getActiveBoxStyle(false)
 
 	// Title
-	content.WriteString(titleStyle.Render("📁 File Metadata Indexer"))
+	content.WriteString(titleStyle.Render(str.appTitle))
 	content.WriteString("\n\n")
 
 	switch m.state {
 	case selectingDirectory:
-		// Show current path prominently
-		content.WriteString(pathStyle.Render(fmt.Sprintf("📍 Current: %s", m.currentPath)))
-		content.WriteString("\n\n")
 		
 		// Show filter input if filtering
 		if m.filtering {
-			content.WriteString(activeBoxStyle.Render(
-				"🔍 Filter Directories:\n\n" +
+			content.WriteString(dynamicActiveBoxStyle.Render(
+				str.filterPrompt + "\n\n" +
 				m.filterInput.View() + "\n\n" +
 				m.directoryList.View() + "\n\n" +
-				"⌨️ Controls:\n" +
-				"  Type to filter  Tab = Auto-complete  Enter = Apply\n" +
-				"  Esc = Cancel filter"))
+				str.filterControls))
 		} else {
-			// Ensure list title is updated with current path
-			m.directoryList.Title = fmt.Sprintf("🗺️ %s", m.currentPath)
-			content.WriteString(activeBoxStyle.Render(
-				"Step 1: Navigate and Select Directory (Directories Only)\n\n" +
+			// Don't override the title here - it's already set in navigation logic
+			content.WriteString(dynamicActiveBoxStyle.Render(
+				str.step1Title + "\n\n" +
 				m.directoryList.View() + "\n\n" +
-				"📍 Navigation:\n" +
-				"  ↑↓ Browse directories    📁 Enter = Go into folder\n" +
-				"  Space = Select this directory  U = Go up one level\n" +
-				"  I = Filter directories  Ctrl+D = Advanced mode"))
+				str.navigation + "\n" +
+				"  " + str.browseDirectories + "    " + str.selectFolder + "\n" +
+				"  " + str.leftRight + "  " + str.selectCurrent + "\n" +
+				"  " + str.filterDirectories + "  " + str.advancedMode))
 		}
 
 	case selectingOutput:
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("Selected: %s", m.selectedDir)))
 		content.WriteString("\n\n")
 		// Show where file will be saved
@@ -541,28 +835,28 @@ func (m model) View() string {
 		}
 		fullPath := filepath.Join(m.selectedDir, previewName)
 		
-		content.WriteString(activeBoxStyle.Render(
+		content.WriteString(dynamicActiveBoxStyle.Render(
 			"Step 2: Output File Name\n\n" +
 			m.outputInput.View() + "\n\n" +
 			fmt.Sprintf("💾 Will save as: %s\n\n", fullPath) +
-			"💡 Tips:\n" +
-			"  • .xlsx extension auto-added\n" +
+			"💡 Simple Mode:\n" +
+			"  • Excel (.xlsx) format\n" +
 			"  • File saved in selected directory\n" +
 			"  • Enter to continue, B/Esc to go back\n" +
-			"  • Ctrl+D = Advanced mode"))
+			"  • Ctrl+D = Advanced options (CSV, debug)"))
 
 	case configuring:
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
 		content.WriteString("\n")
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📄 Output: %s", m.outputPath)))
 		content.WriteString("\n\n")
 
-		configBox := "Step 3: Confirm Settings\n\n"
-		configBox += "✨ Review your settings:\n\n"
-		configBox += fmt.Sprintf("📁 Directory: %s\n", filepath.Base(m.selectedDir))
-		configBox += fmt.Sprintf("📄 Output: %s\n", m.outputPath)
+		configBox := str.step3Title + "\n\n"
+		configBox += "✨ " + str.reviewSettings + "\n\n"
+		configBox += fmt.Sprintf("📁 " + str.directory + " %s\n", filepath.Base(m.selectedDir))
+		configBox += fmt.Sprintf("📄 " + str.output + " %s\n", m.outputPath)
 		
 		if m.advancedMode {
 			formatName := "Excel (.xlsx)"
@@ -571,62 +865,66 @@ func (m model) View() string {
 			} else if m.exportFormat == "both" {
 				formatName = "Excel + CSV"
 			}
-			configBox += fmt.Sprintf("📊 Format: %s\n", formatName)
+			configBox += fmt.Sprintf("📊 " + str.format + " %s\n", formatName)
 			if m.debugMode {
-				configBox += "🔧 Debug: Enabled\n"
+				configBox += "🔧 " + str.debug + "\n"
 			}
-			configBox += "\n🅰️ ADVANCED MODE - More Options Available:\n"
-			configBox += "  ❶ = Change directory     ❷ = Change filename\n"
-			configBox += "  ❸ = Toggle format        🔧 d = Toggle debug\n"
-			configBox += "  🔄 Ctrl+D = Exit advanced mode\n"
+			configBox += "\n🅰️ " + str.advancedModeTitle + "\n"
+			configBox += "  " + str.changeDirectory + "     " + str.changeFilename + "\n"
+			configBox += "  " + str.toggleFormat + "        " + str.toggleDebug + "\n"
+			configBox += "  " + str.exitAdvancedMode + "\n"
 		} else {
-			configBox += "📊 Format: Excel (.xlsx)\n\n"
-			configBox += "⚙️ QUICK MODE - Press keys to edit:\n"
-			configBox += "  ❶ = Change directory     ❷ = Change filename\n"
-			configBox += "  🔥 Ctrl+D = Advanced mode (CSV, debug)\n"
+			configBox += "\n" + str.readyToProcess + "\n"
+			configBox += "  " + str.changeDirectory + "     " + str.changeFilename + "\n"
+			configBox += "  🔥 " + str.advancedOptions + "\n"
 		}
-		configBox += "\n⏩ Enter to start processing  •  B/Esc to go back"
+		configBox += "\n⏩ " + str.enterToStart + "  •  " + str.backToGoBack
 
-		content.WriteString(activeBoxStyle.Render(configBox))
+		content.WriteString(dynamicActiveBoxStyle.Render(configBox))
 
 	case processing:
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
 		content.WriteString("\n")
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📄 Output: %s", m.outputPath)))
 		content.WriteString("\n\n")
-		content.WriteString(activeBoxStyle.Render(
-			"⏳ Processing Files...\n\n" +
-				"🔄 Scanning directory and extracting metadata\n" +
-				"📊 This may take a while for large directories\n\n" +
-				"Press Ctrl+C to cancel"))
+		content.WriteString(dynamicActiveBoxStyle.Render(
+			str.processing + "\n\n" +
+			str.processingDetails))
 
 	case finished:
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
 		content.WriteString("\n")
-		content.WriteString(boxStyle.Render(
+		content.WriteString(dynamicBoxStyle.Render(
 			fmt.Sprintf("📄 Output: %s", m.outputPath)))
 		content.WriteString("\n\n")
 
 		if m.error != "" {
-			content.WriteString(errorStyle.Render("❌ Processing Failed"))
+			content.WriteString(errorStyle.Render(str.processingFailed))
 			content.WriteString("\n")
-			content.WriteString(boxStyle.Render(m.error))
+			content.WriteString(dynamicBoxStyle.Render(m.error))
 			content.WriteString("\n")
-			content.WriteString(helpStyle.Render("🔄 Press 'r' to try again  •  Enter/Esc to quit"))
+			content.WriteString(helpStyle.Render(str.tryAgain + "  •  Enter/Esc " + str.toQuit))
 		} else {
-			content.WriteString(successStyle.Render("✅ Processing Completed Successfully!"))
+			content.WriteString(successStyle.Render(str.processingSuccess))
 			content.WriteString("\n")
-			content.WriteString(boxStyle.Render(m.result))
+			content.WriteString(dynamicBoxStyle.Render(m.result))
 			content.WriteString("\n")
-			content.WriteString(helpStyle.Render("🔄 Press 'r' to process another directory  •  Enter/Esc to quit"))
+			content.WriteString(helpStyle.Render(str.processAnother + "  •  Enter/Esc " + str.toQuit)) 
 		}
 	}
 
 	content.WriteString("\n\n")
-	content.WriteString(helpStyle.Render("Press 'q' or Ctrl+C to quit anytime"))
+	// Bottom status bar
+	statusBar := str.quitAnytime
+	if !m.advancedMode {
+		statusBar += "  •  " + str.advancedMode + "  •  " + str.changeLanguage + "  •  " + str.reset
+	} else {
+		statusBar += "  •  " + str.changeLanguage + "  •  " + str.reset
+	}
+	content.WriteString(helpStyle.Render(statusBar))
 
 	return content.String()
 }
@@ -712,8 +1010,46 @@ func (m model) runPythonScript() tea.Cmd {
 			}
 		}
 
+		// Parse the output to extract key information
+		outputStr := string(output)
+		
+		// Extract the saved file path from output
+		savedPath := fullOutputPath
+		if strings.Contains(outputStr, "saved to:") {
+			// Try to extract actual path if mentioned in output
+			lines := strings.Split(outputStr, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "saved to:") {
+					parts := strings.Split(line, "saved to:")
+					if len(parts) > 1 {
+						savedPath = strings.TrimSpace(parts[1])
+					}
+					break
+				}
+			}
+		}
+		
+		// Count files processed (look for common indicators)
+		fileCount := "multiple"
+		if strings.Contains(outputStr, "processed") {
+			lines := strings.Split(outputStr, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "processed") && strings.Contains(line, "file") {
+					// Extract number if present
+					words := strings.Fields(line)
+					for i, word := range words {
+						if strings.Contains(word, "file") && i > 0 {
+							fileCount = words[i-1]
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+		
 		return processCompleteMsg{
-			result: fmt.Sprintf("🎉 Files successfully processed!\n\n📊 Results:\n%s", string(output)),
+			result: fmt.Sprintf("🎉 Index created successfully!\n\n📋 Files processed: %s\n💾 Saved to: %s\n\n✅ Your file index is ready to use!", fileCount, savedPath),
 		}
 	}
 }
