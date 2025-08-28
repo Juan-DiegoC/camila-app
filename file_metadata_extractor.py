@@ -12,20 +12,181 @@ import mimetypes
 import csv
 import stat
 import tempfile
+import subprocess
 from typing import List, Tuple, Optional
 
-try:
-    import PyPDF2
-except ImportError:
-    print("PyPDF2 not found. Install with: pip install PyPDF2==3.0.1")
-    sys.exit(1)
+# Enable UTF-8 output for Windows console
+if sys.platform == "win32":
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
 
-try:
-    import fitz  # PyMuPDF
-    PYMUPDF_AVAILABLE = True
-except ImportError:
-    PYMUPDF_AVAILABLE = False
-    print("Warning: PyMuPDF not available. PDF processing may be limited for corrupted files.")
+# Required dependencies with versions
+REQUIRED_PACKAGES = {
+    'PyPDF2': '3.0.1',
+    'openpyxl': '3.1.2',
+    'fitz': None  # PyMuPDF - optional fallback
+}
+
+def check_package_installed(package_name: str, version: str = None) -> bool:
+    """Check if a package is installed and optionally check version."""
+    try:
+        __import__(package_name)
+        return True
+    except ImportError:
+        return False
+
+def install_package(package_name: str, version: str = None) -> bool:
+    """Install a package using pip."""
+    try:
+        print(f"[INSTALLING] {package_name}...")
+        package_spec = f"{package_name}=={version}" if version else package_name
+        
+        # Use pip module to install
+        result = subprocess.run([
+            sys.executable, '-m', 'pip', 'install', package_spec
+        ], capture_output=True, text=True, check=True)
+        
+        print(f"[SUCCESS] {package_name} installed successfully")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Failed to install {package_name}: {e}")
+        print(f"[ERROR] stdout: {e.stdout}")
+        print(f"[ERROR] stderr: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"[ERROR] Unexpected error installing {package_name}: {e}")
+        return False
+
+def check_and_install_dependencies(auto_install: bool = True) -> dict:
+    """Check and optionally install all required dependencies."""
+    print("[INFO] Checking dependencies...")
+    
+    status = {
+        'all_available': True,
+        'installed': {},
+        'missing': {},
+        'install_attempted': {}
+    }
+    
+    for package, version in REQUIRED_PACKAGES.items():
+        # Special handling for PyMuPDF which imports as 'fitz'
+        import_name = 'fitz' if package == 'fitz' else package
+        
+        if check_package_installed(import_name):
+            print(f"[OK] {package} is available")
+            status['installed'][package] = True
+        else:
+            print(f"[MISSING] {package} not found")
+            status['missing'][package] = version
+            status['all_available'] = False
+            
+            if auto_install and package != 'fitz':  # Don't auto-install PyMuPDF
+                print(f"[ATTEMPTING] Auto-installing {package}...")
+                success = install_package(package, version)
+                status['install_attempted'][package] = success
+                if success:
+                    status['installed'][package] = True
+                    status['all_available'] = True  # Re-check this
+    
+    return status
+
+def ensure_dependencies() -> tuple:
+    """Ensure dependencies are available, with user interaction if needed."""
+    print("=" * 60)
+    print("FILE METADATA EXTRACTOR - Dependency Check")
+    print("=" * 60)
+    
+    # First, try to install automatically
+    status = check_and_install_dependencies(auto_install=True)
+    
+    if status['all_available']:
+        print("[SUCCESS] All dependencies are available!")
+        print("=" * 60)
+        return True, status
+    
+    # If automatic installation failed, give user options
+    print("\n[WARNING] Some dependencies are still missing:")
+    for package, version in status['missing'].items():
+        if package not in status['install_attempted'] or not status['install_attempted'][package]:
+            version_str = f"=={version}" if version else ""
+            print(f"  - {package}{version_str}")
+    
+    print("\n[OPTIONS]")
+    print("1. Continue with limited functionality (some features may not work)")
+    print("2. Install missing packages manually and restart")
+    print("3. Exit and install dependencies yourself")
+    
+    while True:
+        try:
+            choice = input("\nEnter your choice (1-3): ").strip()
+            if choice == '1':
+                print("[INFO] Continuing with available dependencies...")
+                return False, status
+            elif choice == '2':
+                print("\n[MANUAL INSTALLATION COMMANDS]")
+                for package, version in status['missing'].items():
+                    if package != 'fitz':  # Skip PyMuPDF in manual instructions
+                        version_str = f"=={version}" if version else ""
+                        print(f"  pip install {package}{version_str}")
+                print("\nAfter installing, restart the program.")
+                sys.exit(0)
+            elif choice == '3':
+                print("[INFO] Exiting for manual dependency installation")
+                sys.exit(0)
+            else:
+                print("[ERROR] Invalid choice. Please enter 1, 2, or 3.")
+        except KeyboardInterrupt:
+            print("\n[INFO] Cancelled by user")
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] Input error: {e}")
+            print("[ERROR] Invalid choice. Please enter 1, 2, or 3.")
+
+# Initialize global variables
+PYPDF2_AVAILABLE = False
+PYMUPDF_AVAILABLE = False  
+OPENPYXL_AVAILABLE = False
+PyPDF2 = None
+fitz = None
+Workbook = None
+load_workbook = None
+get_column_letter = None
+Font = None
+Alignment = None
+Border = None
+Side = None
+
+def load_dependencies(status: dict):
+    """Load dependencies based on availability status."""
+    global PYPDF2_AVAILABLE, PYMUPDF_AVAILABLE, OPENPYXL_AVAILABLE
+    global PyPDF2, fitz, Workbook, load_workbook, get_column_letter, Font, Alignment, Border, Side
+    
+    # Load PyPDF2
+    if 'PyPDF2' in status['installed']:
+        try:
+            import PyPDF2
+            PYPDF2_AVAILABLE = True
+        except ImportError:
+            PYPDF2_AVAILABLE = False
+    
+    # Load PyMuPDF (optional)
+    if 'fitz' in status['installed']:
+        try:
+            import fitz
+            PYMUPDF_AVAILABLE = True
+        except ImportError:
+            PYMUPDF_AVAILABLE = False
+    
+    # Load openpyxl
+    if 'openpyxl' in status['installed']:
+        try:
+            from openpyxl import load_workbook, Workbook
+            from openpyxl.utils import get_column_letter
+            from openpyxl.styles import Font, Alignment, Border, Side
+            OPENPYXL_AVAILABLE = True
+        except ImportError:
+            OPENPYXL_AVAILABLE = False
 
 # Setup logging
 def setup_logging(debug: bool = False):
@@ -36,14 +197,6 @@ def setup_logging(debug: bool = False):
     return logging.getLogger(__name__)
 
 logger = setup_logging()
-
-try:
-    from openpyxl import load_workbook, Workbook
-    from openpyxl.utils import get_column_letter
-    from openpyxl.styles import Font, Alignment, Border, Side
-except ImportError:
-    print("openpyxl not found. Install with: pip install openpyxl==3.1.2")
-    sys.exit(1)
 
 
 def extract_number_from_filename(filename: str) -> int:
@@ -117,6 +270,10 @@ def is_valid_pdf(file_path: str) -> bool:
 
 def get_pdf_pages_pypdf2(file_path: str) -> Optional[int]:
     """Get PDF pages using PyPDF2."""
+    if not PYPDF2_AVAILABLE:
+        logger.debug("PyPDF2 not available - skipping PyPDF2 method")
+        return None
+        
     try:
         logger.debug(f"Trying PyPDF2 for {file_path}")
         with open(file_path, 'rb') as file:
@@ -439,41 +596,63 @@ def export_to_csv(data: List[dict], csv_file: str) -> bool:
 def process_files_to_excel(directory: str, output_file: str = "metadata_output.xlsx", export_csv: bool = False, litigant_name: str = ""):
     """Process files and write metadata to Excel file matching the template format."""
     
+    # Check if we can create Excel files
+    if not OPENPYXL_AVAILABLE and not export_csv and not output_file.endswith('.csv'):
+        logger.error("Cannot create Excel files - openpyxl not available. Switching to CSV output.")
+        print("[WARNING] Switching to CSV output due to missing dependencies")
+        output_file = output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+        export_csv = True
+    
     # Get ordered files
     ordered_items = get_ordered_files(directory)
     
-    # Create new workbook (always start fresh to match template)
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Indice Electrónico"
+    # Only create Excel workbook if openpyxl is available and we need Excel output
+    wb = None
+    ws = None
+    if OPENPYXL_AVAILABLE and not output_file.endswith('.csv'):
+        # Create new workbook (always start fresh to match template)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Indice Electrónico"
     
-    # Add headers and formatting
-    add_headers_and_formatting(ws, directory, litigant_name)
+    # Add headers and formatting (only for Excel)
+    if ws is not None:
+        add_headers_and_formatting(ws, directory, litigant_name)
     
-    header_font, header_alignment, data_font, data_alignment, thin_border = setup_excel_formatting()
+    # Setup Excel formatting (only if needed)
+    header_font, header_alignment, data_font, data_alignment, thin_border = None, None, None, None, None
+    if ws is not None:
+        header_font, header_alignment, data_font, data_alignment, thin_border = setup_excel_formatting()
     
     # Starting row for data (A12 as specified)
     start_row = 12
     current_page = 1  # Track page numbering
     
+    # Collect all data first (works with or without Excel)
+    data_rows = []
+    
     for idx, (item_name, item_path) in enumerate(ordered_items):
         current_row = start_row + idx
         
-        # Column A: Nombre Documento (File name)
-        ws[f'A{current_row}'].value = item_name
-        
-        # Column B: Fecha Creación Documento (Creation date)
+        # Collect data for this item
         creation_date_str = get_creation_date(item_path)
-        ws[f'B{current_row}'].value = creation_date_str
+        row_data = {
+            'Nombre Documento': item_name,
+            'Fecha Creación Documento': creation_date_str,
+            'Fecha Incorporación Expediente': creation_date_str,
+            'Orden Documento': idx + 1,
+            'Página Inicio': current_page,
+        }
         
-        # Column C: Fecha Incorporación Expediente (same as creation for now)
-        ws[f'C{current_row}'].value = creation_date_str
-        
-        # Column D: Orden Documento (sequential order)
-        ws[f'D{current_row}'].value = idx + 1
+        # Write to Excel if available
+        if ws is not None:
+            ws[f'A{current_row}'].value = item_name
+            ws[f'B{current_row}'].value = creation_date_str
+            ws[f'C{current_row}'].value = creation_date_str
+            ws[f'D{current_row}'].value = idx + 1
         
         if os.path.isfile(item_path):
-            # Column E: Número Páginas (Number of pages)
+            # Process pages
             try:
                 if item_path.lower().endswith('.pdf'):
                     logger.info(f"Processing potential PDF: {item_path}")
@@ -481,28 +660,33 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
                 else:
                     pages = 1
                     logger.debug(f"Non-PDF file: {item_path}, setting pages = 1")
-                ws[f'E{current_row}'].value = pages
             except Exception as e:
                 logger.error(f"Error processing file {item_path} for page count: {e}")
                 logger.error(f"Stack trace:\n{traceback.format_exc()}")
-                ws[f'E{current_row}'].value = 1  # Fallback
+                pages = 1  # Fallback
             
-            # Column F: Página Inicio (Starting page)
-            ws[f'F{current_row}'].value = current_page
-            
-            # Column G: Página Fin (Ending page) - Formula
-            ws[f'G{current_row}'].value = f"=F{current_row}+E{current_row}-1"
-            
-            # Column H: Formato (File format)
+            # File format and size
             file_ext = os.path.splitext(item_path)[1].upper().lstrip('.')
-            ws[f'H{current_row}'].value = file_ext if file_ext else "UNKNOWN"
-            
-            # Column I: Tamaño (File size)
             file_size = get_file_size(item_path)
-            ws[f'I{current_row}'].value = file_size
             
-            # Column J: Origen (Origin)
-            ws[f'J{current_row}'].value = "ELECTRONICO"
+            # Update row data
+            row_data.update({
+                'Número Páginas': pages,
+                'Página Fin': current_page + pages - 1,
+                'Formato': file_ext if file_ext else "UNKNOWN",
+                'Tamaño': file_size,
+                'Origen': "ELECTRONICO",
+                'Observaciones': ""
+            })
+            
+            # Write to Excel if available
+            if ws is not None:
+                ws[f'E{current_row}'].value = pages
+                ws[f'F{current_row}'].value = current_page
+                ws[f'G{current_row}'].value = f"=F{current_row}+E{current_row}-1"
+                ws[f'H{current_row}'].value = file_ext if file_ext else "UNKNOWN"
+                ws[f'I{current_row}'].value = file_size
+                ws[f'J{current_row}'].value = "ELECTRONICO"
             
             # Update page counter for next file
             current_page += pages
@@ -510,102 +694,112 @@ def process_files_to_excel(directory: str, output_file: str = "metadata_output.x
         elif os.path.isdir(item_path):
             # For directories
             file_count = count_files_in_directory(item_path)
-            ws[f'E{current_row}'].value = 1  # Directories count as 1 page
-            ws[f'F{current_row}'].value = current_page
-            ws[f'G{current_row}'].value = current_page  # Same start and end for directories
-            ws[f'H{current_row}'].value = "CARPETA"
-            ws[f'I{current_row}'].value = f"{file_count} archivos"
-            ws[f'J{current_row}'].value = "ELECTRONICO"
+            
+            # Update row data
+            row_data.update({
+                'Número Páginas': 1,
+                'Página Fin': current_page,
+                'Formato': "CARPETA",
+                'Tamaño': f"{file_count} archivos",
+                'Origen': "ELECTRONICO",
+                'Observaciones': ""
+            })
+            
+            # Write to Excel if available
+            if ws is not None:
+                ws[f'E{current_row}'].value = 1  # Directories count as 1 page
+                ws[f'F{current_row}'].value = current_page
+                ws[f'G{current_row}'].value = current_page  # Same start and end for directories
+                ws[f'H{current_row}'].value = "CARPETA"
+                ws[f'I{current_row}'].value = f"{file_count} archivos"
+                ws[f'J{current_row}'].value = "ELECTRONICO"
             
             current_page += 1
         
-        # Apply formatting to all data cells
-        for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']:
-            cell = ws[f'{col}{current_row}']
-            cell.font = data_font
-            cell.alignment = data_alignment
-            cell.border = thin_border
+        # Add row to data collection
+        data_rows.append(row_data)
+        
+        # Apply formatting to all data cells (Excel only)
+        if ws is not None and header_font is not None:
+            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']:
+                cell = ws[f'{col}{current_row}']
+                cell.font = data_font
+                cell.alignment = data_alignment
+                cell.border = thin_border
     
-    # Adjust column widths
-    column_widths = {
-        'A': 25,  # Nombre Documento
-        'B': 18,  # Fecha Creación
-        'C': 18,  # Fecha Incorporación  
-        'D': 8,   # Orden
-        'E': 10,  # Número Páginas
-        'F': 10,  # Página Inicio
-        'G': 10,  # Página Fin
-        'H': 12,  # Formato
-        'I': 15,  # Tamaño
-        'J': 12,  # Origen
-        'K': 20   # Observaciones
-    }
+    # Adjust column widths (Excel only)
+    if ws is not None:
+        column_widths = {
+            'A': 25,  # Nombre Documento
+            'B': 18,  # Fecha Creación
+            'C': 18,  # Fecha Incorporación  
+            'D': 8,   # Orden
+            'E': 10,  # Número Páginas
+            'F': 10,  # Página Inicio
+            'G': 10,  # Página Fin
+            'H': 12,  # Formato
+            'I': 15,  # Tamaño
+            'J': 12,  # Origen
+            'K': 20   # Observaciones
+        }
+        
+        for col, width in column_widths.items():
+            ws.column_dimensions[col].width = width
     
-    for col, width in column_widths.items():
-        ws.column_dimensions[col].width = width
+    # Use collected data for CSV export (works with or without Excel)
+    csv_data = data_rows if export_csv or output_file.endswith('.csv') else []
     
-    # Prepare data for CSV export if requested
-    csv_data = []
-    if export_csv:
-        for idx, (item_name, item_path) in enumerate(ordered_items):
-            current_row = start_row + idx
-            
-            row_data = {
-                'Nombre Documento': ws[f'A{current_row}'].value,
-                'Fecha Creación Documento': ws[f'B{current_row}'].value,
-                'Fecha Incorporación Expediente': ws[f'C{current_row}'].value,
-                'Orden Documento': ws[f'D{current_row}'].value,
-                'Número Páginas': ws[f'E{current_row}'].value,
-                'Página Inicio': ws[f'F{current_row}'].value,
-                'Página Fin': ws[f'G{current_row}'].value,
-                'Formato': ws[f'H{current_row}'].value,
-                'Tamaño': ws[f'I{current_row}'].value,
-                'Origen': ws[f'J{current_row}'].value,
-                'Observaciones': ws[f'K{current_row}'].value or ''
-            }
-            csv_data.append(row_data)
-    
-    # Save the Excel workbook
-    try:
-        safe_excel_file = create_safe_filename(output_file)
-        logger.info(f"Saving Excel file: {safe_excel_file}")
-        wb.save(safe_excel_file)
-        print(f"Metadata extracted and saved to {safe_excel_file}")
-        print(f"Processed {len(ordered_items)} items from {directory}")
-        print(f"Format matches 'indice de ejemplo.xlsm' template")
+    # Save the Excel workbook (only if Excel is available and needed)
+    if wb is not None and not output_file.endswith('.csv'):
+        try:
+            safe_excel_file = create_safe_filename(output_file)
+            logger.info(f"Saving Excel file: {safe_excel_file}")
+            wb.save(safe_excel_file)
+            print(f"Metadata extracted and saved to {safe_excel_file}")
+            print(f"Processed {len(ordered_items)} items from {directory}")
+            print(f"Format matches 'indice de ejemplo.xlsm' template")
+        except PermissionError as e:
+            logger.error(f"Permission denied when saving Excel file: {e}")
+            print(f"ERROR: Permission denied when saving {output_file}")
+            print("Possible causes:")
+            print("- File is open in Excel or another program")
+            print("- Insufficient write permissions in the directory")
+            print("Trying CSV export instead...")
+            csv_file = output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+            export_to_csv(csv_data, csv_file)
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error saving Excel file: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            print(f"ERROR: Failed to save Excel file: {e}")
+            print("Trying CSV export instead...")
+            csv_file = output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+            export_to_csv(csv_data, csv_file)
+            return
         
         # Export to CSV if requested
         if export_csv:
             csv_file = safe_excel_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
             export_to_csv(csv_data, csv_file)
-            
-    except PermissionError as e:
-        logger.error(f"Permission denied when saving Excel file: {e}")
-        print(f"ERROR: Permission denied when saving {output_file}")
-        print("Possible causes:")
-        print("- File is open in Excel or another program")
-        print("- Insufficient write permissions in the directory")
-        print("- File is read-only")
-        
-        # Try to export CSV as fallback
-        if export_csv or True:  # Always try CSV as fallback
-            print("\nTrying CSV export as fallback...")
-            csv_file = output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
-            if export_to_csv(csv_data, csv_file):
-                print("CSV export successful!")
-            else:
-                print("CSV export also failed.")
-        
-        raise  # Re-raise to be caught by main()
-        
-    except Exception as e:
-        logger.error(f"Unexpected error saving Excel file: {e}")
-        logger.error(f"Excel save traceback:\n{traceback.format_exc()}")
-        print(f"ERROR: Unexpected error saving {output_file}: {e}")
-        raise
+    
+    # Handle CSV-only output or fallback to CSV
+    elif csv_data:
+        csv_file = create_safe_filename(output_file) if output_file.endswith('.csv') else output_file.replace('.xlsx', '.csv').replace('.xlsm', '.csv')
+        export_to_csv(csv_data, csv_file)
+        print(f"Metadata extracted and saved to {csv_file}")
+        print(f"Processed {len(ordered_items)} items from {directory}")
+        if not OPENPYXL_AVAILABLE:
+            print("[INFO] CSV format used due to missing Excel dependencies")
+        print(f"Format matches 'indice de ejemplo.xlsm' template")
 
 
 def main():
+    # Check and install dependencies FIRST, before any user interaction
+    deps_ok, dep_status = ensure_dependencies()
+    
+    # Load the available dependencies  
+    load_dependencies(dep_status)
+    
     parser = argparse.ArgumentParser(description='Extract file metadata and write to Excel')
     parser.add_argument('--directory', '-d', 
                        default=os.getcwd(),

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -118,6 +120,7 @@ type model struct {
 	exportFormat    string // "excel", "csv", "both"
 	debugMode       bool
 	processing      bool
+	processingStart time.Time
 	result          string
 	error           string
 	width           int
@@ -216,7 +219,7 @@ func getStrings(isSpanish bool) langStrings {
 			filterDirectories: "I = Filtrar directorios",
 			advancedMode:      "Ctrl+D = Modo avanzado",
 			processing:        "⏳ Procesando Archivos...",
-			processingDetails: "🔄 Escaneando directorio y extrayendo metadatos\n📊 Esto puede tomar tiempo para directorios grandes\n\nPresiona Ctrl+C para cancelar",
+			processingDetails: "🔄 Escaneando directorio y extrayendo metadatos\n📊 Esto puede tomar tiempo para directorios grandes\n⏱️ Tiempo transcurrido: %s\n📄 Log: file-indexer-debug.log\n\nPresiona Ctrl+C para cancelar",
 			finished:          "Finalizado",
 			processingFailed:  "❌ Procesamiento Fallido",
 			processingSuccess: "✅ ¡Procesamiento Completado Exitosamente!",
@@ -637,6 +640,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Reset to show all directories
 					items := m.getFilteredDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
+					m.directoryList.ResetSelected() // Force complete reset of list state
+					m.directoryList.ResetFilter()   // Clear any internal filtering state
 					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 					m.allDirectories = convertToDirectoryItems(items)
@@ -663,6 +668,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						filteredItems = append(filteredItems, dir)
 					}
 					m.directoryList.SetItems(filteredItems)
+					m.directoryList.ResetSelected() // Force complete reset of list state
+					m.directoryList.ResetFilter()   // Clear any internal filtering state
 					m.directoryList.Select(0) // Reset cursor to first item when filtering
 					return m, cmd
 				}
@@ -694,6 +701,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Update directory list and path display
 						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
+						m.directoryList.ResetSelected() // Force complete reset of list state
+						m.directoryList.ResetFilter()   // Clear any internal filtering state
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 						m.allDirectories = convertToDirectoryItems(items)
@@ -715,6 +724,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Update directory list and path display
 						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
+						m.directoryList.ResetSelected() // Force complete reset of list state
+						m.directoryList.ResetFilter()   // Clear any internal filtering state
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 						m.allDirectories = convertToDirectoryItems(items)
@@ -734,6 +745,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Refresh directory list with new filter
 				items := m.getFilteredDirectoryItems(m.currentPath)
 				m.directoryList.SetItems(items)
+				m.directoryList.ResetSelected() // Force complete reset of list state
+				m.directoryList.ResetFilter()   // Clear any internal filtering state
 				m.directoryList.Select(0) // Reset cursor to first item
 				// Update title to show current mode
 				titleSuffix := ""
@@ -752,6 +765,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.currentPath = parentDir
 					items := m.getFilteredDirectoryItems(m.currentPath)
 					m.directoryList.SetItems(items)
+					m.directoryList.ResetSelected() // Force complete reset of list state
+					m.directoryList.ResetFilter()   // Clear any internal filtering state
 					m.directoryList.Select(0) // Reset cursor to first item
 					m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 					m.allDirectories = convertToDirectoryItems(items)
@@ -765,6 +780,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// Update directory list and path display
 						items := m.getFilteredDirectoryItems(m.currentPath)
 						m.directoryList.SetItems(items)
+						m.directoryList.ResetSelected() // Force complete reset of list state
+						m.directoryList.ResetFilter()   // Clear any internal filtering state
 						m.directoryList.Select(0) // Reset cursor to first item
 						m.directoryList.Title = fmt.Sprintf("Navigate: %s", m.currentPath)
 						m.allDirectories = convertToDirectoryItems(items)
@@ -855,7 +872,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				m.state = processing
-				return m, m.runPythonScript()
+				m.processingStart = time.Now()
+				return m, tea.Batch(m.runPythonScript(), tick())
 			}
 
 		case processing:
@@ -888,6 +906,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Refresh directory list to reflect processed directories
 				items := m.getFilteredDirectoryItems(m.currentPath)
 				m.directoryList.SetItems(items)
+				m.directoryList.ResetSelected() // Force complete reset of list state
+				m.directoryList.ResetFilter()   // Clear any internal filtering state
 				m.directoryList.Select(0)
 				titleSuffix := ""
 				if m.showProcessedDirs {
@@ -901,6 +921,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	
+	case tickMsg:
+		// Only continue ticking if we're still processing
+		if m.state == processing {
+			return m, tick()
+		}
+		return m, nil
+
 	case processCompleteMsg:
 		m.processing = false
 		if msg.error != "" {
@@ -997,37 +1024,40 @@ func (m model) View() string {
 		fullPath := filepath.Join(m.selectedDir, previewName)
 		
 		content.WriteString(dynamicActiveBoxStyle.Render(
-			"Step 2: Output File Name\n\n" +
+			str.step2Title + "\n\n" +
 			m.outputInput.View() + "\n\n" +
 			fmt.Sprintf("💾 Will save as: %s\n\n", fullPath) +
-			"💡 Simple Mode:\n" +
-			"  • Excel (.xlsx) format\n" +
-			"  • File saved in selected directory\n" +
-			"  • Enter to continue, B/Esc to go back\n" +
-			"  • Ctrl+D = Advanced options (CSV, debug)"))
+			"💡 Modo Simple:\n" +
+			"  • Formato Excel (.xlsx)\n" +
+			"  • Archivo guardado en directorio seleccionado\n" +
+			"  • Enter para continuar, B/Esc para regresar\n" +
+			"  • Ctrl+D = Opciones avanzadas (CSV, debug)"))
 
 	case selectingLitigant:
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("Selected: %s", m.selectedDir)))
+			fmt.Sprintf("Seleccionado: %s", m.selectedDir)))
 		content.WriteString("\n\n")
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("Output: %s", m.outputPath)))
+			fmt.Sprintf("Archivo: %s", m.outputPath)))
 		content.WriteString("\n\n")
 		
 		content.WriteString(dynamicActiveBoxStyle.Render(
-			"Step 3: Litigant Name\n\n" +
+			str.step3Title + "\n\n" +
 			m.litigantInput.View() + "\n\n" +
-			"💼 Enter the name of the person litigating\n" +
-			"   (e.g., Juan Pérez, María González)\n\n" +
-			"📝 This will be included in the document header\n\n" +
-			"Enter to continue, B/Esc to go back"))
+			"💼 Ingrese el nombre de la persona litigante\n" +
+			"   (ej., Juan Pérez, María González)\n\n" +
+			"📝 Se incluirá en el encabezado del documento\n\n" +
+			"Enter para continuar, B/Esc para regresar"))
 
 	case configuring:
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
+			fmt.Sprintf("📁 Directorio: %s", m.selectedDir)))
 		content.WriteString("\n")
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📄 Output: %s", m.outputPath)))
+			fmt.Sprintf("📄 Archivo: %s", m.outputPath)))
+		content.WriteString("\n")
+		content.WriteString(dynamicBoxStyle.Render(
+			fmt.Sprintf("🏛️ Litigante: %s", m.litigantName)))
 		content.WriteString("\n\n")
 
 		configBox := str.step4Title + "\n\n"
@@ -1064,21 +1094,23 @@ func (m model) View() string {
 
 	case processing:
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
+			fmt.Sprintf("📁 Directorio: %s", m.selectedDir)))
 		content.WriteString("\n")
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📄 Output: %s", m.outputPath)))
+			fmt.Sprintf("📄 Archivo: %s", m.outputPath)))
 		content.WriteString("\n\n")
+		elapsed := time.Since(m.processingStart)
+		elapsedStr := fmt.Sprintf("%02d:%02d", int(elapsed.Minutes()), int(elapsed.Seconds())%60)
 		content.WriteString(dynamicActiveBoxStyle.Render(
 			str.processing + "\n\n" +
-			str.processingDetails))
+			fmt.Sprintf(str.processingDetails, elapsedStr)))
 
 	case finished:
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📁 Directory: %s", m.selectedDir)))
+			fmt.Sprintf("📁 Directorio: %s", m.selectedDir)))
 		content.WriteString("\n")
 		content.WriteString(dynamicBoxStyle.Render(
-			fmt.Sprintf("📄 Output: %s", m.outputPath)))
+			fmt.Sprintf("📄 Archivo: %s", m.outputPath)))
 		content.WriteString("\n\n")
 
 		if m.error != "" {
@@ -1120,6 +1152,16 @@ func checkmark(selected bool) string {
 type processCompleteMsg struct {
 	result string
 	error  string
+}
+
+// Message type for timer ticks during processing
+type tickMsg time.Time
+
+// tick command for updating the processing timer
+func tick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m model) runPythonScript() tea.Cmd {
@@ -1170,71 +1212,186 @@ func (m model) runPythonScript() tea.Cmd {
 			args = append(args, "--litigant", m.litigantName)
 		}
 
-		// Execute Python script
+		// Create log file for debugging
+		logFile := filepath.Join(m.selectedDir, "file-indexer-debug.log")
+		f, logErr := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if logErr != nil {
+			log.Printf("Warning: Could not create log file: %v", logErr)
+		}
+		defer func() {
+			if f != nil {
+				f.Close()
+			}
+		}()
+
+		// Log the command being executed
+		if f != nil {
+			logMsg := fmt.Sprintf("[%s] TUI: Executing command: %s\n", time.Now().Format("2006-01-02 15:04:05"), strings.Join(args, " "))
+			f.WriteString(logMsg)
+		}
+
+		// Execute Python script with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute) // 5 minute timeout
+		defer cancel()
+
 		var cmd *exec.Cmd
 		if runtime.GOOS == "windows" {
-			cmd = exec.Command("python", args...)
+			cmd = exec.CommandContext(ctx, "python", args...)
 		} else {
-			cmd = exec.Command("python3", args...)
+			cmd = exec.CommandContext(ctx, "python3", args...)
 		}
 
-		output, err := cmd.CombinedOutput()
+		// Capture both stdout and stderr separately
+		stdoutPipe, err := cmd.StdoutPipe()
 		if err != nil {
-			errorMsg := fmt.Sprintf("❌ Python execution failed: %v\n\n", err)
-			if strings.Contains(err.Error(), "executable file not found") {
-				errorMsg += "🐍 Python is not installed or not in PATH\n\n"
-				errorMsg += "Solutions:\n"
-				errorMsg += "1. Install Python from https://python.org\n"
-				errorMsg += "2. Make sure 'Add Python to PATH' is checked during installation\n"
-				errorMsg += "3. Restart this application after installing Python\n\n"
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI ERROR: Failed to create stdout pipe: %v\n", time.Now().Format("2006-01-02 15:04:05"), err))
 			}
-			errorMsg += "📋 Output:\n" + string(output)
+			return processCompleteMsg{
+				error: fmt.Sprintf("Failed to create stdout pipe: %v", err),
+			}
+		}
+
+		stderrPipe, err := cmd.StderrPipe()
+		if err != nil {
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI ERROR: Failed to create stderr pipe: %v\n", time.Now().Format("2006-01-02 15:04:05"), err))
+			}
+			return processCompleteMsg{
+				error: fmt.Sprintf("Failed to create stderr pipe: %v", err),
+			}
+		}
+
+		// Start the command
+		if err := cmd.Start(); err != nil {
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI ERROR: Failed to start command: %v\n", time.Now().Format("2006-01-02 15:04:05"), err))
+			}
+			return processCompleteMsg{
+				error: fmt.Sprintf("Failed to start Python script: %v", err),
+			}
+		}
+
+		// Read output in goroutines to avoid deadlocks
+		var stdout, stderr []byte
+		stdoutDone := make(chan error, 1)
+		stderrDone := make(chan error, 1)
+
+		go func() {
+			stdout, err = io.ReadAll(stdoutPipe)
+			stdoutDone <- err
+		}()
+
+		go func() {
+			stderr, err = io.ReadAll(stderrPipe)
+			stderrDone <- err
+		}()
+
+		// Wait for command to complete or timeout
+		cmdDone := make(chan error, 1)
+		go func() {
+			cmdDone <- cmd.Wait()
+		}()
+
+		// Wait for all operations to complete
+		select {
+		case <-ctx.Done():
+			// Timeout occurred
+			cmd.Process.Kill()
+			timeoutMsg := fmt.Sprintf("⏰ Processing timed out after 5 minutes\n\nThis usually indicates:\n• Very large directory (>1000 files)\n• Network drive access issues\n• Python dependency problems\n\nCheck log file: %s", logFile)
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI ERROR: Command timed out after 5 minutes\n", time.Now().Format("2006-01-02 15:04:05")))
+			}
+			return processCompleteMsg{
+				error: timeoutMsg,
+			}
+		case err := <-cmdDone:
+			// Command completed (successfully or with error)
+			<-stdoutDone // Wait for stdout reading to complete
+			<-stderrDone // Wait for stderr reading to complete
+			
+			output := append(stdout, stderr...)
+			
+			// Log the output
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI: Command completed with exit code: %v\n", time.Now().Format("2006-01-02 15:04:05"), err))
+				f.WriteString(fmt.Sprintf("[%s] TUI: STDOUT: %s\n", time.Now().Format("2006-01-02 15:04:05"), string(stdout)))
+				f.WriteString(fmt.Sprintf("[%s] TUI: STDERR: %s\n", time.Now().Format("2006-01-02 15:04:05"), string(stderr)))
+			}
+
+			if err != nil {
+				errorMsg := fmt.Sprintf("❌ Python execution failed: %v\n\n", err)
+				if strings.Contains(err.Error(), "executable file not found") {
+					errorMsg += "🐍 Python is not installed or not in PATH\n\n"
+					errorMsg += "Solutions:\n"
+					errorMsg += "1. Install Python from https://python.org\n"
+					errorMsg += "2. Make sure 'Add Python to PATH' is checked during installation\n"
+					errorMsg += "3. Restart this application after installing Python\n\n"
+				}
+				errorMsg += fmt.Sprintf("📋 Output:\n%s\n\n📄 Debug log saved to: %s", string(output), logFile)
+				
+				if f != nil {
+					f.WriteString(fmt.Sprintf("[%s] TUI ERROR: Returning error to user: %s\n", time.Now().Format("2006-01-02 15:04:05"), errorMsg))
+				}
+				
+				return processCompleteMsg{
+					error: errorMsg,
+				}
+			}
+
+			// Log successful completion
+			if f != nil {
+				f.WriteString(fmt.Sprintf("[%s] TUI SUCCESS: Command completed successfully\n", time.Now().Format("2006-01-02 15:04:05")))
+			}
+
+			// Parse the output to extract key information
+			outputStr := string(output)
+			
+			// Extract the saved file path from output
+			savedPath := fullOutputPath
+			if strings.Contains(outputStr, "saved to:") {
+				// Try to extract actual path if mentioned in output
+				lines := strings.Split(outputStr, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "saved to:") {
+						parts := strings.Split(line, "saved to:")
+						if len(parts) > 1 {
+							savedPath = strings.TrimSpace(parts[1])
+						}
+						break
+					}
+				}
+			}
+			
+			// Count files processed (look for "Processed X items from" pattern)
+			fileCount := "varios"
+			if strings.Contains(outputStr, "Processed") {
+				lines := strings.Split(outputStr, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "Processed") && strings.Contains(line, "items") {
+						// Extract number from "Processed X items from directory"
+						words := strings.Fields(line)
+						for i, word := range words {
+							if word == "Processed" && i+1 < len(words) {
+								fileCount = words[i+1]
+								break
+							}
+						}
+						break
+					}
+				}
+			}
+			
+			// Get the appropriate language strings
+			str := getStrings(m.isSpanish)
 			
 			return processCompleteMsg{
-				error: errorMsg,
+				result: fmt.Sprintf("%s\n\n%s %s\n%s %s\n\n%s", 
+					str.indexCreated, 
+					str.filesProcessed, fileCount,
+					str.savedTo, savedPath,
+					str.readyToUse),
 			}
-		}
-
-		// Parse the output to extract key information
-		outputStr := string(output)
-		
-		// Extract the saved file path from output
-		savedPath := fullOutputPath
-		if strings.Contains(outputStr, "saved to:") {
-			// Try to extract actual path if mentioned in output
-			lines := strings.Split(outputStr, "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "saved to:") {
-					parts := strings.Split(line, "saved to:")
-					if len(parts) > 1 {
-						savedPath = strings.TrimSpace(parts[1])
-					}
-					break
-				}
-			}
-		}
-		
-		// Count files processed (look for common indicators)
-		fileCount := "multiple"
-		if strings.Contains(outputStr, "processed") {
-			lines := strings.Split(outputStr, "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "processed") && strings.Contains(line, "file") {
-					// Extract number if present
-					words := strings.Fields(line)
-					for i, word := range words {
-						if strings.Contains(word, "file") && i > 0 {
-							fileCount = words[i-1]
-							break
-						}
-					}
-					break
-				}
-			}
-		}
-		
-		return processCompleteMsg{
-			result: fmt.Sprintf("🎉 Index created successfully!\n\n📋 Files processed: %s\n💾 Saved to: %s\n\n✅ Your file index is ready to use!", fileCount, savedPath),
 		}
 	}
 }

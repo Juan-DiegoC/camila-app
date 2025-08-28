@@ -19,29 +19,29 @@ def install_package(package_name, version=None):
     import subprocess
     package = f"{package_name}=={version}" if version else package_name
     try:
-        print(f"📦 Installing {package}...")
+        print(f"[INSTALL] Installing {package}...")
         result = subprocess.run([sys.executable, "-m", "pip", "install", package], 
                               capture_output=True, text=True, check=True)
-        print(f"✅ Successfully installed {package}")
+        print(f"[SUCCESS] Successfully installed {package}")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to install {package}: {e}")
+        print(f"[ERROR] Failed to install {package}: {e}")
         print(f"Please install manually: pip install {package}")
         return False
 
 try:
     import PyPDF2
 except ImportError:
-    print("📦 PyPDF2 not found. Attempting auto-install...")
+    print("[INSTALL] PyPDF2 not found. Attempting auto-install...")
     if install_package("PyPDF2", "3.0.1"):
         try:
             import PyPDF2
-            print("✅ PyPDF2 successfully installed and imported!")
+            print("[SUCCESS] PyPDF2 successfully installed and imported!")
         except ImportError:
-            print("❌ Failed to import PyPDF2 after installation")
+            print("[ERROR] Failed to import PyPDF2 after installation")
             sys.exit(1)
     else:
-        print("❌ Could not install PyPDF2. Please install manually:")
+        print("[ERROR] Could not install PyPDF2. Please install manually:")
         print("pip install PyPDF2==3.0.1")
         sys.exit(1)
 
@@ -49,18 +49,18 @@ try:
     import fitz  # PyMuPDF
     PYMUPDF_AVAILABLE = True
 except ImportError:
-    print("📦 PyMuPDF not found. Attempting auto-install...")
+    print("[INSTALL] PyMuPDF not found. Attempting auto-install...")
     if install_package("PyMuPDF"):
         try:
             import fitz
             PYMUPDF_AVAILABLE = True
-            print("✅ PyMuPDF successfully installed!")
+            print("[SUCCESS] PyMuPDF successfully installed!")
         except ImportError:
             PYMUPDF_AVAILABLE = False
-            print("⚠️ PyMuPDF installation failed - PDF processing may be limited")
+            print("[WARNING] PyMuPDF installation failed - PDF processing may be limited")
     else:
         PYMUPDF_AVAILABLE = False
-        print("⚠️ PyMuPDF not available - PDF processing may be limited for corrupted files")
+        print("[WARNING] PyMuPDF not available - PDF processing may be limited for corrupted files")
 
 # Setup logging
 def setup_logging(debug: bool = False):
@@ -77,18 +77,18 @@ try:
     from openpyxl.utils import get_column_letter
     from openpyxl.styles import Font, Alignment, Border, Side
 except ImportError:
-    print("📦 openpyxl not found. Attempting auto-install...")
+    print("[INSTALL] openpyxl not found. Attempting auto-install...")
     if install_package("openpyxl", "3.1.2"):
         try:
             from openpyxl import load_workbook, Workbook
             from openpyxl.utils import get_column_letter
             from openpyxl.styles import Font, Alignment, Border, Side
-            print("✅ openpyxl successfully installed!")
+            print("[SUCCESS] openpyxl successfully installed!")
         except ImportError:
-            print("❌ Failed to import openpyxl after installation")
+            print("[ERROR] Failed to import openpyxl after installation")
             sys.exit(1)
     else:
-        print("❌ Could not install openpyxl. Please install manually:")
+        print("[ERROR] Could not install openpyxl. Please install manually:")
         print("pip install openpyxl==3.1.2")
         sys.exit(1)
 

@@ -1,3 +1,11 @@
+# Required dependencies for File Metadata Extractor
+# These will be automatically installed if missing
 PyPDF2==3.0.1
-PyMuPDF==1.23.14
 openpyxl==3.1.2
+
+# Optional (fallback for PDF processing)
+# Provides better PDF processing for corrupted files
+PyMuPDF>=1.20.0
+
+# Installation command:
+# pip install -r requirements.txt
